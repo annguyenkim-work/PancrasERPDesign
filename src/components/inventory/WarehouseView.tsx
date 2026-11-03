@@ -1,0 +1,902 @@
+import React, { useState } from 'react';
+import { useErp } from '../../context/ErpContext';
+import { 
+  Warehouse, 
+  ArrowLeftRight, 
+  ClipboardCheck, 
+  Search, 
+  Plus, 
+  Check, 
+  Download, 
+  AlertCircle,
+  Truck,
+  PackageCheck,
+  CheckCircle2,
+  SlidersHorizontal,
+  X
+} from 'lucide-react';
+
+export const WarehouseView: React.FC = () => {
+  const { 
+    products, 
+    locations, 
+    transfers, 
+    stockTakes, 
+    createTransfer, 
+    receiveTransfer, 
+    createStockTake, 
+    approveStockTake, 
+    directStockAdjust,
+    currentUser,
+    exportTableToCSV
+  } = useErp();
+
+  const [activeTab, setActiveTab] = useState<'inventory' | 'transfers' | 'stocktake'>('inventory');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedLocFilter, setSelectedLocFilter] = useState<string>('ALL');
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+
+  // Modals state
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showStockTakeModal, setShowStockTakeModal] = useState(false);
+  const [showQuickAdjustModal, setShowQuickAdjustModal] = useState(false);
+  const [selectedProductForAdjust, setSelectedProductForAdjust] = useState<string | null>(null);
+
+  // New transfer form state
+  const [fromLocation, setFromLocation] = useState('WH_NORTH');
+  const [toLocation, setToLocation] = useState('SR_HANOI');
+  const [transferItems, setTransferItems] = useState<{ productId: string; quantity: number }[]>([
+    { productId: products[0]?.id || 'P001', quantity: 2 },
+  ]);
+  const [transferNotes, setTransferNotes] = useState('');
+
+  // Quick adjust form state
+  const [adjustLoc, setAdjustLoc] = useState('WH_NORTH');
+  const [adjustDelta, setAdjustDelta] = useState(1);
+  const [adjustReason, setAdjustReason] = useState('Nhập bù hàng mẫu kiểm định');
+
+  // Filtered products list
+  const filteredProducts = products.filter((p) => {
+    const matchesSearch = 
+      p.code.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.brand.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesCategory = selectedCategory === 'ALL' || p.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  const handleExportStock = () => {
+    const headers = ['Mã SKU', 'Tên sản phẩm', 'Đơn vị', 'Danh mục', 'Giá vốn (đ)', 'Tồn thực tế', 'Đang giữ chỗ', 'Khả dụng', 'Đang chuyển kho'];
+    const rows = filteredProducts.map((p) => {
+      let onHand = 0;
+      let reserved = 0;
+      let inTransit = 0;
+
+      if (selectedLocFilter === 'ALL') {
+        Object.values(p.stockByLocation).forEach((s) => {
+          onHand += s.onHand;
+          reserved += s.reserved;
+          inTransit += s.inTransit;
+        });
+      } else {
+        const s = p.stockByLocation[selectedLocFilter] || { onHand: 0, reserved: 0, inTransit: 0 };
+        onHand = s.onHand;
+        reserved = s.reserved;
+        inTransit = s.inTransit;
+      }
+
+      return [
+        p.code,
+        p.name,
+        p.unit,
+        p.category,
+        p.baseCost,
+        onHand,
+        reserved,
+        Math.max(0, onHand - reserved),
+        inTransit,
+      ];
+    });
+
+    exportTableToCSV(`Ton_Kho_${selectedLocFilter}`, headers, rows);
+  };
+
+  const handleCreateTransferSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (fromLocation === toLocation) {
+      alert('Kho nguồn và kho nhận không được trùng nhau!');
+      return;
+    }
+    createTransfer(fromLocation, toLocation, transferItems, transferNotes);
+    setShowTransferModal(false);
+    setTransferItems([{ productId: products[0]?.id || 'P001', quantity: 1 }]);
+    setTransferNotes('');
+  };
+
+  const handleAddTransferRow = () => {
+    setTransferItems([...transferItems, { productId: products[0]?.id || 'P001', quantity: 1 }]);
+  };
+
+  const handleRemoveTransferRow = (index: number) => {
+    setTransferItems(transferItems.filter((_, i) => i !== index));
+  };
+
+  const handleQuickAdjustSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProductForAdjust) return;
+    directStockAdjust(selectedProductForAdjust, adjustLoc, adjustDelta, adjustReason);
+    setShowQuickAdjustModal(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Top Header & Navigation Tabs */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            Quản Lý Đa Kho &amp; Điều Chuyển Hàng Hóa
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            Quản lý độc lập 3 kho tổng (Long Biên, Bình Dương, Đà Nẵng) và 2 showroom bán lẻ (Cầu Giấy, Q7).
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {/* Segmented Tab Controls */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
+            <button
+              onClick={() => setActiveTab('inventory')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+                activeTab === 'inventory' ? 'bg-white text-slate-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Warehouse className="w-3.5 h-3.5" />
+              <span>Tra cứu tồn kho</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('transfers')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+                activeTab === 'transfers' ? 'bg-white text-slate-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5" />
+              <span>Chuyển kho ({transfers.filter(t => t.status === 'in_transit').length})</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('stocktake')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+                activeTab === 'stocktake' ? 'bg-white text-slate-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ClipboardCheck className="w-3.5 h-3.5" />
+              <span>Kiểm kê &amp; Điều chỉnh</span>
+            </button>
+          </div>
+
+          <button
+            onClick={() => setShowTransferModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors shadow-xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Tạo Phiếu Chuyển Kho</span>
+          </button>
+        </div>
+      </div>
+
+      {/* TAB 1: INVENTORY LOOKUP & MULTI-LOCATION MATRIX */}
+      {activeTab === 'inventory' && (
+        <div className="space-y-4">
+          {/* Filter Bar */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+            <div className="flex flex-1 items-center gap-3">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Tìm theo mã SKU, tên thiết bị, thương hiệu..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 bg-slate-50"
+                />
+              </div>
+
+              {/* Warehouse selector */}
+              <select
+                value={selectedLocFilter}
+                onChange={(e) => setSelectedLocFilter(e.target.value)}
+                className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none"
+              >
+                <option value="ALL">Toàn hệ thống (5 địa điểm)</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.type === 'warehouse' ? 'Kho: ' : 'SR: '} {loc.name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Category selector */}
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none"
+              >
+                <option value="ALL">Tất cả ngành hàng</option>
+                <option value="thiet_bi_ve_sinh">Thiết bị vệ sinh</option>
+                <option value="noi_that_phong_tam">Nội thất phòng tắm</option>
+                <option value="vat_tu_xay_dung">Vật tư xây dựng</option>
+                <option value="combo">Combo phòng tắm</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 font-medium">
+                {filteredProducts.length} mặt hàng
+              </span>
+              <button
+                onClick={handleExportStock}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Xuất Excel</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
+                  <tr>
+                    <th className="py-3 px-4">Mã SKU</th>
+                    <th className="py-3 px-4">Tên hàng hóa &amp; Quy cách</th>
+                    <th className="py-3 px-3 text-center">ĐVT</th>
+                    <th className="py-3 px-3 text-right">Giá vốn niêm yết</th>
+                    <th className="py-3 px-3 text-right">Tồn thực tế</th>
+                    <th className="py-3 px-3 text-right">Đang giữ chỗ</th>
+                    <th className="py-3 px-3 text-right">Khả dụng</th>
+                    <th className="py-3 px-3 text-right">Đang chuyển</th>
+                    <th className="py-3 px-4 text-center">Tồn tại các điểm</th>
+                    <th className="py-3 px-3 text-center">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredProducts.map((p) => {
+                    let onHand = 0;
+                    let reserved = 0;
+                    let inTransit = 0;
+
+                    if (selectedLocFilter === 'ALL') {
+                      Object.values(p.stockByLocation).forEach((s) => {
+                        onHand += s.onHand;
+                        reserved += s.reserved;
+                        inTransit += s.inTransit;
+                      });
+                    } else {
+                      const s = p.stockByLocation[selectedLocFilter] || { onHand: 0, reserved: 0, inTransit: 0 };
+                      onHand = s.onHand;
+                      reserved = s.reserved;
+                      inTransit = s.inTransit;
+                    }
+
+                    const available = Math.max(0, onHand - reserved);
+                    const isLow = onHand <= p.minStockAlert;
+
+                    return (
+                      <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-3 px-4 font-mono font-medium text-slate-900">{p.code}</td>
+                        <td className="py-3 px-4 max-w-sm">
+                          <div className="font-semibold text-slate-900 line-clamp-1">{p.name}</div>
+                          <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+                            <span>{p.brand}</span>
+                            <span>·</span>
+                            <span>{p.origin}</span>
+                            {p.isCombo && (
+                              <>
+                                <span>·</span>
+                                <span className="text-sky-600 font-semibold">Bộ Combo {p.comboComponents?.length} món</span>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 text-center text-slate-600">{p.unit}</td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-slate-700">
+                          {p.baseCost.toLocaleString('vi-VN')} đ
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono font-bold tabular-nums text-slate-900">
+                          {onHand.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-amber-700 font-medium">
+                          {reserved.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono font-bold tabular-nums text-emerald-700">
+                          {available.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums text-sky-700">
+                          {inTransit.toLocaleString()}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-center gap-1.5 text-[10px]">
+                            {locations.map((loc) => {
+                              const qty = p.stockByLocation[loc.id]?.onHand || 0;
+                              return (
+                                <span
+                                  key={loc.id}
+                                  title={`${loc.name}: ${qty} ${p.unit}`}
+                                  className={`px-1.5 py-0.5 rounded font-mono ${
+                                    qty === 0
+                                      ? 'bg-slate-100 text-slate-400'
+                                      : 'bg-sky-50 text-sky-800 font-semibold'
+                                  }`}
+                                >
+                                  {loc.code.replace('KT-', 'K-').replace('SR-', 'S-')}: {qty}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <button
+                            onClick={() => {
+                              setSelectedProductForAdjust(p.id);
+                              setShowQuickAdjustModal(true);
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-sky-700 hover:bg-sky-50 rounded-md transition-colors"
+                            title="Điều chỉnh số lượng tồn kho"
+                          >
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: TRANSFERS BETWEEN WAREHOUSES & SHOWROOMS */}
+      {activeTab === 'transfers' && (
+        <div className="space-y-4">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2">
+              <Truck className="w-5 h-5 text-sky-600" />
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Lịch Sử Điều Chuyển Hàng Giữa Các Kho &amp; Showroom
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Hàng hóa chuyển từ Kho Tổng đến Showroom hoặc liên kho được kiểm soát trạng thái Đang vận chuyển.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowTransferModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors shadow-xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Tạo Phiếu Chuyển Kho</span>
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {transfers.map((trf) => {
+              const srcLoc = locations.find((l) => l.id === trf.fromLocationId);
+              const destLoc = locations.find((l) => l.id === trf.toLocationId);
+              const isInTransit = trf.status === 'in_transit';
+
+              return (
+                <div
+                  key={trf.id}
+                  className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono font-bold text-sm text-slate-900">{trf.code}</span>
+                      <span
+                        className={`text-[11px] font-semibold px-2 py-0.5 rounded-md ${
+                          isInTransit ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}
+                      >
+                        {isInTransit ? 'Đang vận chuyển' : 'Đã tiếp nhận nhập kho'}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-500 flex items-center gap-2">
+                      <span>Khởi tạo: {trf.createdAt}</span>
+                      <span>·</span>
+                      <span>Người tạo: {trf.createdBy}</span>
+                    </div>
+                  </div>
+
+                  {/* Route Visualizer */}
+                  <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200/70 text-xs">
+                    <div className="flex-1">
+                      <div className="text-[10px] text-slate-400 uppercase font-semibold">Kho xuất hàng</div>
+                      <div className="font-bold text-slate-900">{srcLoc?.name}</div>
+                    </div>
+
+                    <div className="flex flex-col items-center px-4">
+                      <ArrowLeftRight className={`w-4 h-4 ${isInTransit ? 'text-amber-500 animate-pulse' : 'text-slate-400'}`} />
+                      <span className="text-[10px] font-mono text-slate-400 mt-0.5">
+                        {isInTransit ? 'Đang trên xe' : 'Đã hoàn tất'}
+                      </span>
+                    </div>
+
+                    <div className="flex-1 text-right">
+                      <div className="text-[10px] text-slate-400 uppercase font-semibold">Điểm tiếp nhận</div>
+                      <div className="font-bold text-slate-900">{destLoc?.name}</div>
+                    </div>
+                  </div>
+
+                  {/* Items List */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-100/60 text-slate-600">
+                        <tr>
+                          <th className="py-2 px-3">Mã SKU</th>
+                          <th className="py-2 px-3">Tên sản phẩm</th>
+                          <th className="py-2 px-3 text-right">Số lượng chuyển</th>
+                          <th className="py-2 px-3 text-center">ĐVT</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {trf.items.map((it) => (
+                          <tr key={it.productId}>
+                            <td className="py-2 px-3 font-mono font-medium text-slate-700">{it.productCode}</td>
+                            <td className="py-2 px-3 text-slate-900 font-medium">{it.productName}</td>
+                            <td className="py-2 px-3 text-right font-mono font-bold tabular-nums text-slate-900">
+                              {it.quantity}
+                            </td>
+                            <td className="py-2 px-3 text-center text-slate-500">{it.unit}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Footer & Action button */}
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <div className="text-xs text-slate-500 italic">
+                      {trf.notes ? `Ghi chú: ${trf.notes}` : 'Chuyển hàng định kỳ'}
+                    </div>
+
+                    {isInTransit && (
+                      <button
+                        onClick={() => receiveTransfer(trf.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-xs"
+                      >
+                        <PackageCheck className="w-3.5 h-3.5" />
+                        <span>Xác Nhận Đã Nhận Hàng &amp; Nhập Kho</span>
+                      </button>
+                    )}
+
+                    {!isInTransit && (
+                      <div className="text-xs text-emerald-700 font-medium flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Đã nhập kho bởi: {trf.receivedBy || 'Thủ kho'} ({trf.receivedAt})</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: STOCK TAKE & INVENTORY AUDITS */}
+      {activeTab === 'stocktake' && (
+        <div className="space-y-4">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2">
+              <ClipboardCheck className="w-5 h-5 text-indigo-600" />
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Kiểm Kê Kho Định Kỳ &amp; Cân Đối Tồn Kho</h3>
+                <p className="text-xs text-slate-500">
+                  Ghi nhận chênh lệch kiểm đếm thực tế và sổ sách ERP, phê duyệt điều chỉnh số liệu tự động.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowStockTakeModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Lập Biên Bản Kiểm Kê</span>
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {stockTakes.map((st) => {
+              const loc = locations.find((l) => l.id === st.locationId);
+              const isPending = st.status === 'pending_approval';
+
+              return (
+                <div key={st.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono font-bold text-sm text-slate-900">{st.code}</span>
+                      <span className="text-xs font-semibold text-slate-700">Kho kiểm tra: {loc?.name}</span>
+                      <span
+                        className={`text-[11px] font-semibold px-2 py-0.5 rounded-md ${
+                          isPending ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}
+                      >
+                        {isPending ? 'Chờ duyệt điều chỉnh' : 'Đã duyệt cập nhật tồn'}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-500">
+                      Ngày kiểm kê: {st.takeDate} · Người kiểm: {st.inspectorName}
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                        <tr>
+                          <th className="py-2.5 px-3">Mã SKU</th>
+                          <th className="py-2.5 px-3">Tên sản phẩm</th>
+                          <th className="py-2.5 px-3 text-center">ĐVT</th>
+                          <th className="py-2.5 px-3 text-right">Tồn sổ sách</th>
+                          <th className="py-2.5 px-3 text-right">Tồn thực đếm</th>
+                          <th className="py-2.5 px-3 text-right">Chênh lệch</th>
+                          <th className="py-2.5 px-3">Lý do chênh lệch</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {st.items.map((it) => (
+                          <tr key={it.productId}>
+                            <td className="py-2 px-3 font-mono text-slate-700">{it.productCode}</td>
+                            <td className="py-2 px-3 font-medium text-slate-900">{it.productName}</td>
+                            <td className="py-2 px-3 text-center text-slate-500">{it.unit}</td>
+                            <td className="py-2 px-3 text-right font-mono tabular-nums text-slate-700">{it.bookQuantity}</td>
+                            <td className="py-2 px-3 text-right font-mono font-bold tabular-nums text-slate-900">{it.actualQuantity}</td>
+                            <td
+                              className={`py-2 px-3 text-right font-mono font-bold tabular-nums ${
+                                it.difference === 0
+                                  ? 'text-slate-400'
+                                  : it.difference > 0
+                                    ? 'text-emerald-600'
+                                    : 'text-rose-600'
+                              }`}
+                            >
+                              {it.difference > 0 ? `+${it.difference}` : it.difference}
+                            </td>
+                            <td className="py-2 px-3 text-slate-500 italic">{it.reason || 'Khớp số liệu'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <div className="text-xs text-slate-500">
+                      Ghi chú: {st.notes}
+                    </div>
+
+                    {isPending && (currentUser.role === 'admin' || currentUser.role === 'director' || currentUser.role === 'accountant') && (
+                      <button
+                        onClick={() => approveStockTake(st.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-xs"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Phê Duyệt Điều Chỉnh Tồn Kho</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1: TẠO PHIẾU CHUYỂN KHO */}
+      {showTransferModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-sky-600" />
+                <h3 className="font-bold text-slate-900 text-sm">Lập Phiếu Điều Chuyển Kho Hàng</h3>
+              </div>
+              <button onClick={() => setShowTransferModal(false)} className="text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTransferSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Kho xuất (Nguồn)</label>
+                  <select
+                    value={fromLocation}
+                    onChange={(e) => setFromLocation(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white"
+                  >
+                    {locations.map((l) => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Kho / Showroom nhận (Đích)</label>
+                  <select
+                    value={toLocation}
+                    onChange={(e) => setToLocation(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white"
+                  >
+                    {locations.map((l) => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Items List to transfer */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-slate-700">Danh sách thiết bị chuyển</label>
+                  <button
+                    type="button"
+                    onClick={handleAddTransferRow}
+                    className="text-xs font-medium text-sky-600 hover:text-sky-700 flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Thêm mặt hàng</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {transferItems.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <select
+                        value={item.productId}
+                        onChange={(e) => {
+                          const updated = [...transferItems];
+                          updated[idx].productId = e.target.value;
+                          setTransferItems(updated);
+                        }}
+                        className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
+                      >
+                        {products.map((p) => {
+                          const stockInFrom = p.stockByLocation[fromLocation]?.onHand || 0;
+                          return (
+                            <option key={p.id} value={p.id}>
+                              {p.code} - {p.name} (Kho xuất còn: {stockInFrom})
+                            </option>
+                          );
+                        })}
+                      </select>
+
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) => {
+                          const updated = [...transferItems];
+                          updated[idx].quantity = Math.max(1, parseInt(e.target.value) || 1);
+                          setTransferItems(updated);
+                        }}
+                        className="w-20 px-3 py-1.5 text-xs rounded-lg border border-slate-300 text-center font-mono"
+                        placeholder="Số lượng"
+                      />
+
+                      {transferItems.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTransferRow(idx)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Ghi chú vận chuyển</label>
+                <textarea
+                  rows={2}
+                  value={transferNotes}
+                  onChange={(e) => setTransferNotes(e.target.value)}
+                  placeholder="Ví dụ: Chuyển mẫu trưng bày showroom hoặc bù tồn kho phục vụ dự án..."
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowTransferModal(false)}
+                  className="px-4 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg shadow-xs"
+                >
+                  Xác Nhận Xuất Xe Chuyển Kho
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: LẬP BIÊN BẢN KIỂM KÊ */}
+      {showStockTakeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900 text-sm">Lập Biên Bản Kiểm Kê Kho</h3>
+              <button onClick={() => setShowStockTakeModal(false)} className="text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <p className="text-xs text-slate-500">
+                Kiểm đếm nhanh mặt hàng để gửi kế toán và ban giám đốc duyệt cân đối số liệu tồn kho.
+              </p>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Chọn địa điểm kiểm kê</label>
+                <select
+                  value={adjustLoc}
+                  onChange={(e) => setAdjustLoc(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300"
+                >
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Mặt hàng kiểm đếm</label>
+                <select
+                  value={selectedProductForAdjust || products[0]?.id}
+                  onChange={(e) => setSelectedProductForAdjust(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300"
+                >
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.code} - {p.name} (Tồn sổ sách: {p.stockByLocation[adjustLoc]?.onHand || 0})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Số lượng thực tế kiểm đếm được</label>
+                <input
+                  type="number"
+                  min="0"
+                  defaultValue={products[0]?.stockByLocation[adjustLoc]?.onHand || 10}
+                  id="actualCountInput"
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Lý do giải trình chênh lệch</label>
+                <input
+                  type="text"
+                  defaultValue="Kiểm kê định kỳ tháng 11"
+                  id="reasonStockTakeInput"
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowStockTakeModal(false)}
+                  className="px-4 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const actualQty = parseInt((document.getElementById('actualCountInput') as HTMLInputElement)?.value || '0');
+                    const reason = (document.getElementById('reasonStockTakeInput') as HTMLInputElement)?.value || 'Kiểm kê định kỳ';
+                    createStockTake(adjustLoc, [{ productId: selectedProductForAdjust || products[0].id, actualQuantity: actualQty, reason }], reason);
+                    setShowStockTakeModal(false);
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs"
+                >
+                  Lưu Biên Bản Kiểm Kê
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: QUICK STOCK ADJUSTMENT */}
+      {showQuickAdjustModal && selectedProductForAdjust && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-bold text-slate-900 text-sm">Điều Chỉnh Tồn Kho Trực Tiếp</h3>
+              <button onClick={() => setShowQuickAdjustModal(false)} className="text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleQuickAdjustSubmit} className="space-y-3">
+              <div className="text-xs text-slate-600 font-medium">
+                Sản phẩm: {products.find(p => p.id === selectedProductForAdjust)?.name}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Kho điều chỉnh</label>
+                <select
+                  value={adjustLoc}
+                  onChange={(e) => setAdjustLoc(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300"
+                >
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Số lượng thay đổi (+ thêm vào, - bớt ra)
+                </label>
+                <input
+                  type="number"
+                  value={adjustDelta}
+                  onChange={(e) => setAdjustDelta(parseInt(e.target.value) || 0)}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 font-mono font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Lý do điều chỉnh</label>
+                <input
+                  type="text"
+                  value={adjustReason}
+                  onChange={(e) => setAdjustReason(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickAdjustModal(false)}
+                  className="px-4 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg shadow-xs"
+                >
+                  Cập Nhật Tồn Kho
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

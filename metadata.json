@@ -1,0 +1,6 @@
+{
+  "name": "PancrasERP - Quản trị Doanh nghiệp Thiết bị Vệ sinh & Nội thất",
+  "description": "Hệ thống ERP PancrasERP quản lý tập trung đa kho, showroom, mua hàng container nhiều mặt hàng phân bổ giá vốn, bán hàng đại lý & dự án, combo sản phẩm, hạn mức công nợ và bảo hành điện tử.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
