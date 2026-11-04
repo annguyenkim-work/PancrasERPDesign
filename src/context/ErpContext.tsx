@@ -4,8 +4,12 @@ import {
   UserProfile, 
   Location, 
   Product, 
+  ProductCategory,
   Customer, 
+  CustomerType,
+  ProjectMilestone,
   Order, 
+  Supplier, 
   StockTransfer, 
   StockTake, 
   PurchaseOrder, 
@@ -51,7 +55,11 @@ interface ComboAvailabilityCheck {
 
 interface ErpContextType {
   currentUser: UserProfile;
+  users: UserProfile[];
   setCurrentUserRole: (role: Role) => void;
+  switchToEmployee: (id: string) => void;
+  addEmployee: (data: Omit<UserProfile, 'id' | 'avatar'>) => void;
+  updateEmployee: (id: string, data: Omit<UserProfile, 'id' | 'avatar'>) => void;
   selectedLocationId: string; // 'ALL' or specific location ID
   setSelectedLocationId: (id: string) => void;
   locations: Location[];
@@ -90,6 +98,51 @@ interface ErpContextType {
   recordPayment: (payment: Partial<PaymentReceipt>) => void;
   updateCustomerCredit: (customerId: string, newLimit: number, newTermDays: number) => void;
 
+  // Master data
+  addProduct: (data: {
+    code: string;
+    name: string;
+    category: ProductCategory;
+    brand: string;
+    unit: string;
+    baseCost: number;
+    retailPrice: number;
+    dealerPrice: number;
+    projectPrice: number;
+    minStockAlert: number;
+    weightKg: number;
+    origin: string;
+    warrantyMonths: number;
+    description: string;
+  }) => void;
+  addCustomer: (data: {
+    name: string;
+    type: CustomerType;
+    phone: string;
+    email: string;
+    address: string;
+    taxCode?: string;
+    creditLimit: number;
+    paymentTermDays: number;
+    discountRate: number;
+    projectName?: string;
+    contractValue?: number;
+    milestones?: ProjectMilestone[];
+  }) => void;
+  updateProjectMilestones: (customerId: string, milestones: ProjectMilestone[]) => void;
+  addSupplier: (data: Omit<Supplier, 'id'>) => void;
+  createCombo: (data: {
+    code: string;
+    name: string;
+    brand: string;
+    retailPrice: number;
+    dealerPrice: number;
+    projectPrice: number;
+    warrantyMonths: number;
+    description: string;
+    components: { productId: string; quantity: number }[];
+  }) => void;
+
   // Warranty actions
   activateWarranty: (serial: string, productId: string, orderCode: string, name: string, phone: string, address: string) => void;
   createWarrantyTicket: (serial: string, issue: string, customerName: string, customerPhone: string) => void;
@@ -103,11 +156,31 @@ const ErpContext = createContext<ErpContextType | null>(null);
 
 const STORAGE_KEY_PREFIX = 'pancras_erp_';
 
+const canPlanProjectMilestones = (role: Role) =>
+  role === 'admin' || role === 'director' || role === 'sales';
+
+const withSeedMilestones = (list: Customer[]): Customer[] =>
+  list.map((customer) => {
+    if (customer.type !== 'project' || (customer.milestones && customer.milestones.length > 0)) {
+      return customer;
+    }
+    const seed = INITIAL_CUSTOMERS.find((item) => item.id === customer.id);
+    if (!seed?.milestones?.length) return customer;
+    return { ...customer, milestones: seed.milestones };
+  });
+
 export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [users, setUsers] = useState<UserProfile[]>(() => {
+    const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}users`);
+    return saved ? JSON.parse(saved) : INITIAL_USERS;
+  });
   const [currentUser, setCurrentUser] = useState<UserProfile>(INITIAL_USERS[0]);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('ALL');
   const [locations] = useState<Location[]>(INITIAL_LOCATIONS);
-  const [suppliers] = useState(INITIAL_SUPPLIERS);
+  const [suppliers, setSuppliers] = useState<Supplier[]>(() => {
+    const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}suppliers`);
+    return saved ? JSON.parse(saved) : INITIAL_SUPPLIERS;
+  });
 
   // Core state with local storage hydration
   const [products, setProducts] = useState<Product[]>(() => {
@@ -117,7 +190,7 @@ export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [customers, setCustomers] = useState<Customer[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}customers`);
-    return saved ? JSON.parse(saved) : INITIAL_CUSTOMERS;
+    return withSeedMilestones(saved ? JSON.parse(saved) : INITIAL_CUSTOMERS);
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
@@ -190,6 +263,14 @@ export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(`${STORAGE_KEY_PREFIX}auditLogs`, JSON.stringify(auditLogs));
   }, [auditLogs]);
 
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}suppliers`, JSON.stringify(suppliers));
+  }, [suppliers]);
+
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}users`, JSON.stringify(users));
+  }, [users]);
+
   const showToast = (type: Toast['type'], title: string, message: string) => {
     const id = Date.now().toString() + Math.random().toString().slice(2, 5);
     setToasts((prev) => [...prev, { id, type, title, message }]);
@@ -222,13 +303,38 @@ export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setCurrentUserRole = (role: Role) => {
-    const match = INITIAL_USERS.find((u) => u.role === role) || {
+    const match = users.find((u) => u.role === role) || {
       ...currentUser,
       role,
       roleLabel: role.toUpperCase(),
     };
     setCurrentUser(match);
     showToast('info', 'Chuyển đổi vai trò', `Đang mô phỏng quyền truy cập: ${match.roleLabel}`);
+  };
+
+  const switchToEmployee = (id: string) => {
+    const match = users.find((u) => u.id === id);
+    if (!match) return;
+    setCurrentUser(match);
+    showToast('info', 'Chuyển đổi vai trò', `Đang mô phỏng quyền truy cập: ${match.roleLabel}`);
+  };
+
+  const addEmployee = (data: Omit<UserProfile, 'id' | 'avatar'>) => {
+    const employee: UserProfile = {
+      id: `USR-${Date.now().toString().slice(-6)}`,
+      avatar: '',
+      ...data,
+    };
+    setUsers((prev) => [employee, ...prev]);
+    logAudit('hr', 'CREATE_EMPLOYEE', `Thêm nhân viên ${employee.name} — ${employee.roleLabel}`);
+    showToast('success', 'Đã thêm nhân viên', `${employee.name} đã có trong danh sách nhân sự.`);
+  };
+
+  const updateEmployee = (id: string, data: Omit<UserProfile, 'id' | 'avatar'>) => {
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...data } : u)));
+    setCurrentUser((prev) => (prev.id === id ? { ...prev, ...data } : prev));
+    logAudit('hr', 'UPDATE_EMPLOYEE', `Cập nhật hồ sơ nhân viên ${data.name} — ${data.roleLabel}`);
+    showToast('success', 'Đã cập nhật hồ sơ', `${data.name} đã được lưu.`);
   };
 
   // Combo Stock Availability Check
@@ -612,6 +718,8 @@ export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deliveryDate: orderData.deliveryDate,
       notes: orderData.notes,
       contractCode: orderData.contractCode,
+      milestoneId: orderData.milestoneId,
+      milestoneName: orderData.milestoneName,
       projectMilestones: orderData.projectMilestones,
     };
 
@@ -772,6 +880,173 @@ export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('success', 'Đã cập nhật hạn mức', `${cust?.name} có hạn mức mới: ${newLimit.toLocaleString('vi-VN')} đ`);
   };
 
+  const blankStock = () => {
+    const stock: Product['stockByLocation'] = {};
+    for (const loc of locations) {
+      stock[loc.id] = { onHand: 0, reserved: 0, inTransit: 0 };
+    }
+    return stock;
+  };
+
+  const addProduct = (data: {
+    code: string;
+    name: string;
+    category: ProductCategory;
+    brand: string;
+    unit: string;
+    baseCost: number;
+    retailPrice: number;
+    dealerPrice: number;
+    projectPrice: number;
+    minStockAlert: number;
+    weightKg: number;
+    origin: string;
+    warrantyMonths: number;
+    description: string;
+  }) => {
+    const product: Product = {
+      id: `P-${Date.now().toString().slice(-6)}`,
+      ...data,
+      stockByLocation: blankStock(),
+    };
+    setProducts((prev) => [product, ...prev]);
+    logAudit('inventory', 'CREATE_PRODUCT', `Thêm sản phẩm ${product.code} — ${product.name} vào danh mục`);
+    showToast('success', 'Đã thêm sản phẩm', `${product.code} đã có trong danh mục hàng hóa.`);
+  };
+
+  const addCustomer = (data: {
+    name: string;
+    type: CustomerType;
+    phone: string;
+    email: string;
+    address: string;
+    taxCode?: string;
+    creditLimit: number;
+    paymentTermDays: number;
+    discountRate: number;
+    projectName?: string;
+    contractValue?: number;
+    milestones?: ProjectMilestone[];
+  }) => {
+    const prefix = data.type === 'dealer' ? 'DL' : data.type === 'project' ? 'DA' : 'KH';
+    const customer: Customer = {
+      id: `CUST-${Date.now().toString().slice(-6)}`,
+      code: `${prefix}-${Date.now().toString().slice(-4)}`,
+      name: data.name,
+      type: data.type,
+      phone: data.phone,
+      email: data.email,
+      address: data.address,
+      taxCode: data.taxCode,
+      creditLimit: data.type === 'retail' ? 0 : data.creditLimit,
+      paymentTermDays: data.type === 'retail' ? 0 : data.paymentTermDays,
+      currentDebt: 0,
+      discountRate: data.type === 'retail' ? 0 : data.discountRate,
+      assignedSalesId: currentUser.id,
+      status: 'active',
+      projectName: data.type === 'project' ? data.projectName : undefined,
+      contractValue: data.type === 'project' ? data.contractValue : undefined,
+      milestones:
+        data.type === 'project' && canPlanProjectMilestones(currentUser.role)
+          ? data.milestones
+          : undefined,
+    };
+    setCustomers((prev) => [customer, ...prev]);
+    logAudit('debt', 'CREATE_CUSTOMER', `Thêm khách hàng ${customer.code} — ${customer.name}`);
+    const batchCount = customer.milestones?.length || 0;
+    showToast(
+      'success',
+      'Đã thêm khách hàng',
+      batchCount > 0
+        ? `${customer.name} đã có trong danh bạ, kèm ${batchCount} đợt bàn giao.`
+        : `${customer.name} đã có trong danh bạ.`
+    );
+  };
+
+  const updateProjectMilestones = (customerId: string, milestones: ProjectMilestone[]) => {
+    if (!canPlanProjectMilestones(currentUser.role)) {
+      showToast('error', 'Không có quyền', 'Chỉ Sales, Admin và Giám đốc được lập đợt bàn giao.');
+      return;
+    }
+    const customer = customers.find((item) => item.id === customerId);
+    if (!customer || customer.type !== 'project') {
+      showToast('error', 'Không phải khách dự án', 'Đợt bàn giao chỉ gắn trên hồ sơ dự án.');
+      return;
+    }
+    setCustomers((prev) =>
+      prev.map((item) => (item.id === customerId ? { ...item, milestones } : item))
+    );
+    logAudit(
+      'debt',
+      'UPDATE_PROJECT_MILESTONES',
+      `Cập nhật ${milestones.length} đợt bàn giao cho ${customer.name}`
+    );
+    showToast('success', 'Đã lưu đợt bàn giao', `${customer.projectName || customer.name} có ${milestones.length} đợt.`);
+  };
+
+  const addSupplier = (data: Omit<Supplier, 'id'>) => {
+    const supplier: Supplier = {
+      id: `SUP-${Date.now().toString().slice(-4)}`,
+      ...data,
+    };
+    setSuppliers((prev) => [supplier, ...prev]);
+    logAudit('procurement', 'CREATE_SUPPLIER', `Thêm nhà cung cấp ${supplier.code} — ${supplier.name}`);
+    showToast('success', 'Đã thêm nhà cung cấp', `${supplier.name} có thể chọn khi lập đơn mua.`);
+  };
+
+  const createCombo = (data: {
+    code: string;
+    name: string;
+    brand: string;
+    retailPrice: number;
+    dealerPrice: number;
+    projectPrice: number;
+    warrantyMonths: number;
+    description: string;
+    components: { productId: string; quantity: number }[];
+  }) => {
+    const comboComponents = data.components.map((comp) => {
+      const child = products.find((p) => p.id === comp.productId);
+      return {
+        productId: comp.productId,
+        productCode: child?.code || '',
+        productName: child?.name || '',
+        quantity: comp.quantity,
+      };
+    });
+    const baseCost = comboComponents.reduce((sum, comp) => {
+      const child = products.find((p) => p.id === comp.productId);
+      return sum + (child?.baseCost || 0) * comp.quantity;
+    }, 0);
+
+    const combo: Product = {
+      id: `COMBO-${Date.now().toString().slice(-4)}`,
+      code: data.code,
+      name: data.name,
+      category: 'combo',
+      brand: data.brand,
+      unit: 'Bộ Combo',
+      baseCost,
+      retailPrice: data.retailPrice,
+      dealerPrice: data.dealerPrice,
+      projectPrice: data.projectPrice,
+      minStockAlert: 0,
+      weightKg: comboComponents.reduce((sum, comp) => {
+        const child = products.find((p) => p.id === comp.productId);
+        return sum + (child?.weightKg || 0) * comp.quantity;
+      }, 0),
+      origin: 'Lắp ráp nội bộ',
+      isCombo: true,
+      comboComponents,
+      stockByLocation: blankStock(),
+      warrantyMonths: data.warrantyMonths,
+      description: data.description,
+    };
+    setProducts((prev) => [combo, ...prev]);
+    logAudit('inventory', 'CREATE_COMBO', `Tạo combo ${combo.code} gồm ${comboComponents.length} linh kiện`);
+    showToast('success', 'Đã tạo combo', `${combo.name} đã có trong danh sách bộ sản phẩm.`);
+  };
+
   // Warranty Actions
   const activateWarranty = (
     serial: string,
@@ -882,7 +1157,11 @@ export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <ErpContext.Provider
       value={{
         currentUser,
+        users,
         setCurrentUserRole,
+        switchToEmployee,
+        addEmployee,
+        updateEmployee,
         selectedLocationId,
         setSelectedLocationId,
         locations,
@@ -912,6 +1191,11 @@ export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateOrderStatus,
         recordPayment,
         updateCustomerCredit,
+        addProduct,
+        addCustomer,
+        updateProjectMilestones,
+        addSupplier,
+        createCombo,
         activateWarranty,
         createWarrantyTicket,
         updateWarrantyTicketStatus,

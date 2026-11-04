@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useErp } from '../../context/ErpContext';
-import { Order, OrderStatus, CustomerType, OrderItem } from '../../types/erp';
+import { Order, OrderStatus, CustomerType, OrderItem, ProjectMilestone } from '../../types/erp';
 import { 
   ShoppingCart, 
   Plus, 
@@ -32,8 +32,12 @@ export const SalesView: React.FC = () => {
     updateOrderStatus,
     checkComboAvailability,
     currentUser,
-    exportTableToCSV
+    exportTableToCSV,
+    showToast
   } = useErp();
+
+  const canChooseExportLocation = currentUser.role === 'admin' || currentUser.role === 'director';
+  const workplace = locations.find((l) => l.id === currentUser.branchId) || null;
 
   const [activeTab, setActiveTab] = useState<'all' | 'retail' | 'dealer' | 'project'>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -54,8 +58,15 @@ export const SalesView: React.FC = () => {
   const [orderItems, setOrderItems] = useState<{ productId: string; quantity: number }[]>([
     { productId: products[0]?.id || 'P001', quantity: 1 },
   ]);
-  const [contractCode, setContractCode] = useState('HĐ-DA-2026-X01');
+  const [contractCode] = useState('HĐ-DA-2026-X01');
+  const [selectedMilestoneId, setSelectedMilestoneId] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
+
+  useEffect(() => {
+    if (orderCustomerType === 'retail' && !canChooseExportLocation && workplace) {
+      setOrderLocationId(workplace.id);
+    }
+  }, [orderCustomerType, canChooseExportLocation, workplace]);
 
   // Filtered orders
   const filteredOrders = orders.filter((o) => {
@@ -95,7 +106,22 @@ export const SalesView: React.FC = () => {
   const handleCreateOrderSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    const exportLocationId =
+      orderCustomerType === 'retail' && !canChooseExportLocation
+        ? workplace?.id || ''
+        : orderLocationId;
+
+    if (orderCustomerType === 'retail' && !exportLocationId) {
+      showToast('error', 'Chưa có điểm xuất hàng', 'Tài khoản chưa được gán chi nhánh làm việc nên không thể lập đơn khách lẻ.');
+      return;
+    }
+
     const selectedCust = customers.find((c) => c.id === selectedCustomerId);
+    const selectedMilestone = selectedCust?.milestones?.find((item) => item.id === selectedMilestoneId);
+    if (orderCustomerType === 'project' && (selectedCust?.milestones?.length || 0) > 0 && !selectedMilestone) {
+      showToast('error', 'Chưa chọn đợt bàn giao', 'Chọn đợt đã lập trên hồ sơ dự án để lấy mặt hàng và số lượng.');
+      return;
+    }
     const finalItems: OrderItem[] = orderItems.map((item) => {
       const prod = products.find((p) => p.id === item.productId)!;
       const { unitPrice, discount } = calculateItemPrice(prod.id, orderCustomerType, selectedCustomerId);
@@ -124,7 +150,7 @@ export const SalesView: React.FC = () => {
       customerId: selectedCustomerId,
       customerName: orderCustomerType === 'retail' ? retailCustomerName : selectedCust?.name || '',
       customerPhone: orderCustomerType === 'retail' ? retailCustomerPhone : selectedCust?.phone || '',
-      locationId: orderLocationId,
+      locationId: exportLocationId,
       items: finalItems,
       subtotal,
       discountTotal,
@@ -133,6 +159,9 @@ export const SalesView: React.FC = () => {
       paidAmount: orderCustomerType === 'retail' ? grandTotal : 0,
       deliveryAddress: orderCustomerType === 'retail' ? retailCustomerAddress : selectedCust?.address || '',
       contractCode: orderCustomerType === 'project' ? contractCode : undefined,
+      milestoneId: orderCustomerType === 'project' ? selectedMilestone?.id : undefined,
+      milestoneName: orderCustomerType === 'project' ? selectedMilestone?.name : undefined,
+      deliveryDate: orderCustomerType === 'project' ? selectedMilestone?.deliveryDate : undefined,
       notes: orderNotes,
     });
 
@@ -244,6 +273,8 @@ export const SalesView: React.FC = () => {
           const loc = locations.find((l) => l.id === ord.locationId);
           const isPendingApproval = ord.status === 'pending_approval';
           const canApprove = currentUser.role === 'admin' || currentUser.role === 'director' || currentUser.role === 'accountant';
+          const milestoneLabel = ord.milestoneName
+            || customers.find((c) => c.id === ord.customerId)?.milestones?.find((m) => m.id === ord.milestoneId)?.name;
 
           return (
             <div
@@ -328,6 +359,11 @@ export const SalesView: React.FC = () => {
                   {ord.contractCode && (
                     <div className="text-[11px] text-purple-700 font-semibold mt-0.5">
                       Hợp đồng kinh tế: {ord.contractCode}
+                    </div>
+                  )}
+                  {milestoneLabel && (
+                    <div className="text-[11px] text-purple-700 font-semibold mt-0.5">
+                      Đợt bàn giao: {milestoneLabel}{ord.deliveryDate ? ` · ${ord.deliveryDate}` : ''}
                     </div>
                   )}
                 </div>
@@ -496,12 +532,15 @@ export const SalesView: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateOrderSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
+            <form onSubmit={handleCreateOrderSubmit} className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-4">
               {/* Customer Type Selector */}
               <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-lg">
                 <button
                   type="button"
-                  onClick={() => setOrderCustomerType('retail')}
+                  onClick={() => {
+                    setOrderCustomerType('retail');
+                    setSelectedMilestoneId('');
+                  }}
                   className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
                     orderCustomerType === 'retail' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-600'
                   }`}
@@ -510,7 +549,10 @@ export const SalesView: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setOrderCustomerType('dealer')}
+                  onClick={() => {
+                    setOrderCustomerType('dealer');
+                    setSelectedMilestoneId('');
+                  }}
                   className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
                     orderCustomerType === 'dealer' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-600'
                   }`}
@@ -519,7 +561,10 @@ export const SalesView: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setOrderCustomerType('project')}
+                  onClick={() => {
+                    setOrderCustomerType('project');
+                    setSelectedMilestoneId('');
+                  }}
                   className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
                     orderCustomerType === 'project' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-600'
                   }`}
@@ -563,6 +608,32 @@ export const SalesView: React.FC = () => {
                       className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300"
                     />
                   </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Xuất từ</label>
+                    <select
+                      value={canChooseExportLocation ? orderLocationId : workplace?.id || ''}
+                      onChange={(e) => setOrderLocationId(e.target.value)}
+                      disabled={!canChooseExportLocation}
+                      className={`w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 ${
+                        canChooseExportLocation ? 'bg-white' : 'bg-slate-100 text-slate-600 cursor-not-allowed'
+                      }`}
+                    >
+                      {canChooseExportLocation ? (
+                        locations.map((l) => (
+                          <option key={l.id} value={l.id}>{l.name}</option>
+                        ))
+                      ) : workplace ? (
+                        <option value={workplace.id}>{workplace.name}</option>
+                      ) : (
+                        <option value="">Chưa gán chi nhánh làm việc</option>
+                      )}
+                    </select>
+                    {!canChooseExportLocation && (
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Xuất từ chi nhánh bạn đang làm việc. Chỉ Admin và Giám đốc được đổi điểm xuất.
+                      </p>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -572,7 +643,11 @@ export const SalesView: React.FC = () => {
                     </label>
                     <select
                       value={selectedCustomerId}
-                      onChange={(e) => setSelectedCustomerId(e.target.value)}
+                      onChange={(e) => {
+                        setSelectedCustomerId(e.target.value);
+                        setSelectedMilestoneId('');
+                        setOrderItems([{ productId: products[0]?.id || 'P001', quantity: 1 }]);
+                      }}
                       className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
                       required
                     >
@@ -602,6 +677,19 @@ export const SalesView: React.FC = () => {
                 </div>
               )}
 
+              {orderCustomerType === 'project' && selectedCustomerId && (
+                <ProjectBatchPicker
+                  milestones={customers.find((c) => c.id === selectedCustomerId)?.milestones || []}
+                  selectedId={selectedMilestoneId}
+                  onSelect={(milestone) => {
+                    setSelectedMilestoneId(milestone?.id || '');
+                    if (milestone?.items?.length) {
+                      setOrderItems(milestone.items.map((line) => ({ productId: line.productId, quantity: line.quantity })));
+                    }
+                  }}
+                />
+              )}
+
               {/* Items in Order */}
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -624,7 +712,7 @@ export const SalesView: React.FC = () => {
 
                     return (
                       <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <select
                             value={item.productId}
                             onChange={(e) => {
@@ -632,7 +720,7 @@ export const SalesView: React.FC = () => {
                               updated[idx].productId = e.target.value;
                               setOrderItems(updated);
                             }}
-                            className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
+                            className="w-0 min-w-0 flex-1 px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
                           >
                             {products.map((p) => (
                               <option key={p.id} value={p.id}>
@@ -641,7 +729,7 @@ export const SalesView: React.FC = () => {
                             ))}
                           </select>
 
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 shrink-0">
                             <span className="text-[11px] text-slate-500">SL:</span>
                             <input
                               type="number"
@@ -656,15 +744,14 @@ export const SalesView: React.FC = () => {
                             />
                           </div>
 
-                          {orderItems.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItemRow(idx)}
-                              className="p-1 text-slate-400 hover:text-rose-600"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItemRow(idx)}
+                            disabled={orderItems.length === 1}
+                            className="shrink-0 p-1 text-slate-400 hover:text-rose-600 disabled:invisible"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
                         </div>
 
                         {/* COMBO COMPONENT STOCK VALIDATOR BANNER */}
@@ -794,6 +881,47 @@ export const SalesView: React.FC = () => {
           order={selectedOrderForPrint}
           onClose={() => setSelectedOrderForPrint(null)}
         />
+      )}
+    </div>
+  );
+};
+
+const ProjectBatchPicker: React.FC<{
+  milestones: ProjectMilestone[];
+  selectedId: string;
+  onSelect: (milestone: ProjectMilestone | null) => void;
+}> = ({ milestones, selectedId, onSelect }) => {
+  const selected = milestones.find((item) => item.id === selectedId);
+  if (milestones.length === 0) {
+    return (
+      <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-900">
+        Dự án này chưa có đợt bàn giao. Sales, Admin hoặc Giám đốc lập các đợt trong Danh bạ khách hàng, mỗi đợt gồm mặt hàng và số lượng.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <label className="block">
+        <span className="block text-xs font-semibold text-slate-700 mb-1">Đợt bàn giao</span>
+        <select
+          required
+          value={selectedId}
+          onChange={(e) => onSelect(milestones.find((item) => item.id === e.target.value) || null)}
+          className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
+        >
+          <option value="">-- Chọn đợt đã lập trên hồ sơ dự án --</option>
+          {milestones.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name} · {item.deliveryDate} · {item.itemsSummary}
+            </option>
+          ))}
+        </select>
+      </label>
+      {selected && (
+        <p className="text-[11px] text-purple-700">
+          Đã lấy {selected.items?.length || 0} dòng mặt hàng từ đợt này. Số lượng vẫn sửa được trước khi lưu đơn.
+        </p>
       )}
     </div>
   );

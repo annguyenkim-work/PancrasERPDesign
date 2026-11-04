@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
 import { useErp } from '../../context/ErpContext';
+import {
+  Location,
+  Order,
+  Product,
+  ProductCategory,
+  PurchaseOrder,
+  StockTake,
+  StockTransfer,
+} from '../../types/erp';
 import { 
   Warehouse, 
   ArrowLeftRight, 
@@ -21,7 +30,9 @@ export const WarehouseView: React.FC = () => {
     products, 
     locations, 
     transfers, 
-    stockTakes, 
+    stockTakes,
+    orders,
+    purchaseOrders,
     createTransfer, 
     receiveTransfer, 
     createStockTake, 
@@ -41,6 +52,8 @@ export const WarehouseView: React.FC = () => {
   const [showStockTakeModal, setShowStockTakeModal] = useState(false);
   const [showQuickAdjustModal, setShowQuickAdjustModal] = useState(false);
   const [selectedProductForAdjust, setSelectedProductForAdjust] = useState<string | null>(null);
+  const [detailProductId, setDetailProductId] = useState<string | null>(null);
+  const [manualAdjustments, setManualAdjustments] = useState<ManualAdjustment[]>([]);
 
   // New transfer form state
   const [fromLocation, setFromLocation] = useState('WH_NORTH');
@@ -125,6 +138,18 @@ export const WarehouseView: React.FC = () => {
   const handleQuickAdjustSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProductForAdjust) return;
+    setManualAdjustments((prev) => [
+      {
+        id: `ADJ-${Date.now()}`,
+        productId: selectedProductForAdjust,
+        locationId: adjustLoc,
+        delta: adjustDelta,
+        reason: adjustReason,
+        at: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        actor: `${currentUser.name} (${currentUser.roleLabel})`,
+      },
+      ...prev,
+    ]);
     directStockAdjust(selectedProductForAdjust, adjustLoc, adjustDelta, adjustReason);
     setShowQuickAdjustModal(false);
   };
@@ -337,16 +362,24 @@ export const WarehouseView: React.FC = () => {
                           </div>
                         </td>
                         <td className="py-3 px-3 text-center">
-                          <button
-                            onClick={() => {
-                              setSelectedProductForAdjust(p.id);
-                              setShowQuickAdjustModal(true);
-                            }}
-                            className="p-1.5 text-slate-500 hover:text-sky-700 hover:bg-sky-50 rounded-md transition-colors"
-                            title="Điều chỉnh số lượng tồn kho"
-                          >
-                            <SlidersHorizontal className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => setDetailProductId(p.id)}
+                              className="px-2 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-50 rounded-md"
+                            >
+                              Chi tiết
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedProductForAdjust(p.id);
+                                setShowQuickAdjustModal(true);
+                              }}
+                              className="p-1.5 text-slate-500 hover:text-sky-700 hover:bg-sky-50 rounded-md transition-colors"
+                              title="Điều chỉnh số lượng tồn kho"
+                            >
+                              <SlidersHorizontal className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -612,14 +645,14 @@ export const WarehouseView: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateTransferSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
+            <form onSubmit={handleCreateTransferSubmit} className="flex-1 overflow-y-auto overflow-x-hidden p-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                <div className="min-w-0">
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Kho xuất (Nguồn)</label>
                   <select
                     value={fromLocation}
                     onChange={(e) => setFromLocation(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white"
+                    className="w-full min-w-0 px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white"
                   >
                     {locations.map((l) => (
                       <option key={l.id} value={l.id}>{l.name}</option>
@@ -627,12 +660,12 @@ export const WarehouseView: React.FC = () => {
                   </select>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Kho / Showroom nhận (Đích)</label>
                   <select
                     value={toLocation}
                     onChange={(e) => setToLocation(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white"
+                    className="w-full min-w-0 px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white"
                   >
                     {locations.map((l) => (
                       <option key={l.id} value={l.id}>{l.name}</option>
@@ -655,9 +688,9 @@ export const WarehouseView: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   {transferItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
+                    <div key={idx} className="flex items-center gap-2 min-w-0">
                       <select
                         value={item.productId}
                         onChange={(e) => {
@@ -665,7 +698,7 @@ export const WarehouseView: React.FC = () => {
                           updated[idx].productId = e.target.value;
                           setTransferItems(updated);
                         }}
-                        className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
+                        className="w-0 min-w-0 flex-1 px-3 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
                       >
                         {products.map((p) => {
                           const stockInFrom = p.stockByLocation[fromLocation]?.onHand || 0;
@@ -686,19 +719,18 @@ export const WarehouseView: React.FC = () => {
                           updated[idx].quantity = Math.max(1, parseInt(e.target.value) || 1);
                           setTransferItems(updated);
                         }}
-                        className="w-20 px-3 py-1.5 text-xs rounded-lg border border-slate-300 text-center font-mono"
+                        className="w-20 shrink-0 px-3 py-1.5 text-xs rounded-lg border border-slate-300 text-center font-mono"
                         placeholder="Số lượng"
                       />
 
-                      {transferItems.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveTransferRow(idx)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTransferRow(idx)}
+                        disabled={transferItems.length === 1}
+                        className="shrink-0 p-1.5 text-slate-400 hover:text-rose-600 disabled:invisible"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -897,6 +929,410 @@ export const WarehouseView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {detailProductId && (
+        <ProductStockDetail
+          product={products.find((item) => item.id === detailProductId) || null}
+          locations={locations}
+          orders={orders}
+          purchaseOrders={purchaseOrders}
+          transfers={transfers}
+          stockTakes={stockTakes}
+          manualAdjustments={manualAdjustments.filter((item) => item.productId === detailProductId)}
+          workplaceId={currentUser.branchId !== 'ALL' ? currentUser.branchId : null}
+          onClose={() => setDetailProductId(null)}
+        />
+      )}
+    </div>
+  );
+};
+
+const CATEGORY_LABEL: Record<ProductCategory, string> = {
+  thiet_bi_ve_sinh: 'Thiết bị vệ sinh',
+  noi_that_phong_tam: 'Nội thất phòng tắm',
+  vat_tu_xay_dung: 'Vật tư xây dựng',
+  combo: 'Combo',
+};
+
+const ORDER_MOVE_LABEL: Record<string, string> = {
+  exporting: 'Đang soạn xuất kho',
+  delivering: 'Đã xuất, đang giao',
+  completed: 'Đã xuất và hoàn tất',
+};
+
+interface ManualAdjustment {
+  id: string;
+  productId: string;
+  locationId: string;
+  delta: number;
+  reason: string;
+  at: string;
+  actor: string;
+}
+
+type HistoryKind = 'inbound' | 'outbound' | 'transfer_out' | 'transfer_in' | 'adjust';
+
+interface HistoryEvent {
+  id: string;
+  at: string;
+  sortKey: number;
+  locationId: string;
+  kind: HistoryKind;
+  badge: string;
+  title: string;
+  qtyLabel: string;
+  place: string;
+  detail: string;
+  actorLabel: string;
+  actor: string;
+}
+
+const HISTORY_FILTERS: { id: 'all' | HistoryKind | 'transfer'; label: string }[] = [
+  { id: 'all', label: 'Tất cả' },
+  { id: 'inbound', label: 'Nhập' },
+  { id: 'outbound', label: 'Xuất bán' },
+  { id: 'transfer', label: 'Chuyển kho' },
+  { id: 'adjust', label: 'Điều chỉnh' },
+];
+
+const historyTone: Record<HistoryKind, string> = {
+  inbound: 'bg-emerald-100 text-emerald-800',
+  outbound: 'bg-sky-100 text-sky-800',
+  transfer_out: 'bg-amber-100 text-amber-800',
+  transfer_in: 'bg-indigo-100 text-indigo-800',
+  adjust: 'bg-rose-100 text-rose-800',
+};
+
+const timeValue = (value: string) => {
+  const parsed = Date.parse(value.includes('T') ? value : value.replace(' ', 'T'));
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const placeName = (locations: Location[], id: string) => locations.find((item) => item.id === id)?.name || id;
+
+const buildHistory = (
+  product: Product,
+  locations: Location[],
+  orders: Order[],
+  purchaseOrders: PurchaseOrder[],
+  transfers: StockTransfer[],
+  stockTakes: StockTake[],
+  manualAdjustments: ManualAdjustment[],
+): HistoryEvent[] => {
+  const events: HistoryEvent[] = [];
+
+  purchaseOrders.forEach((po) => {
+    const line = po.items.find((item) => item.productId === product.id);
+    if (!line || po.status === 'cancelled') return;
+    const received = po.status === 'received';
+    events.push({
+      id: `po-${po.id}`,
+      at: received ? po.expectedArrivalDate || po.orderDate : po.orderDate,
+      sortKey: timeValue(received ? po.expectedArrivalDate || po.orderDate : po.orderDate),
+      locationId: po.targetWarehouseId,
+      kind: 'inbound',
+      badge: received ? 'Nhập kho' : 'Vận đơn',
+      title: received
+        ? `Đã nhập từ vận đơn ${po.billOfLading || po.code}`
+        : `Vận đơn ${po.billOfLading || 'chưa có số'} — chưa nhập kho`,
+      qtyLabel: `+${line.quantity.toLocaleString('vi-VN')} ${product.unit}`,
+      place: placeName(locations, po.targetWarehouseId),
+      detail: `${po.code} · ${po.supplierName}${po.containerNo ? ` · Container ${po.containerNo}` : ''}${po.vesselName ? ` · ${po.vesselName}` : ''}`,
+      actorLabel: 'Người nhập',
+      actor: received ? 'Bộ phận mua hàng' : 'Chưa nhập kho',
+    });
+  });
+
+  orders.forEach((order) => {
+    if (!ORDER_MOVE_LABEL[order.status]) return;
+    const line = order.items.find((item) => item.productId === product.id);
+    if (!line) return;
+    events.push({
+      id: `ord-${order.id}`,
+      at: order.deliveryDate || order.createdAt,
+      sortKey: timeValue(order.deliveryDate || order.createdAt),
+      locationId: order.locationId,
+      kind: 'outbound',
+      badge: 'Xuất bán',
+      title: `Xuất cho hóa đơn ${order.code}`,
+      qtyLabel: `-${line.quantity.toLocaleString('vi-VN')} ${product.unit}`,
+      place: placeName(locations, order.locationId),
+      detail: `${ORDER_MOVE_LABEL[order.status]} · ${order.customerName}${order.contractCode ? ` · HĐ ${order.contractCode}` : ''}`,
+      actorLabel: 'Người xuất',
+      actor: order.salesPersonName,
+    });
+  });
+
+  transfers.forEach((transfer) => {
+    if (transfer.status === 'cancelled') return;
+    const line = transfer.items.find((item) => item.productId === product.id);
+    if (!line) return;
+    const fromName = placeName(locations, transfer.fromLocationId);
+    const toName = placeName(locations, transfer.toLocationId);
+    events.push({
+      id: `trf-out-${transfer.id}`,
+      at: transfer.shippedAt || transfer.createdAt,
+      sortKey: timeValue(transfer.shippedAt || transfer.createdAt),
+      locationId: transfer.fromLocationId,
+      kind: 'transfer_out',
+      badge: 'Chuyển đi',
+      title: `Chuyển sang ${toName}`,
+      qtyLabel: `-${line.quantity.toLocaleString('vi-VN')} ${product.unit}`,
+      place: fromName,
+      detail: `${transfer.code}${transfer.status === 'in_transit' ? ' · Đang trên đường' : ' · Đã giao kho nhận'}`,
+      actorLabel: 'Người xuất chuyển',
+      actor: transfer.createdBy,
+    });
+    if (transfer.status === 'received') {
+      events.push({
+        id: `trf-in-${transfer.id}`,
+        at: transfer.receivedAt || transfer.shippedAt || transfer.createdAt,
+        sortKey: timeValue(transfer.receivedAt || transfer.shippedAt || transfer.createdAt),
+        locationId: transfer.toLocationId,
+        kind: 'transfer_in',
+        badge: 'Nhận về',
+        title: `Nhận từ ${fromName}`,
+        qtyLabel: `+${line.quantity.toLocaleString('vi-VN')} ${product.unit}`,
+        place: toName,
+        detail: transfer.code,
+        actorLabel: 'Người nhập',
+        actor: transfer.receivedBy || 'Chưa ghi người nhận',
+      });
+    }
+  });
+
+  stockTakes.forEach((take) => {
+    if (take.status !== 'approved') return;
+    const line = take.items.find((item) => item.productId === product.id);
+    if (!line) return;
+    const delta = line.difference;
+    events.push({
+      id: `st-${take.id}`,
+      at: take.takeDate,
+      sortKey: timeValue(take.takeDate),
+      locationId: take.locationId,
+      kind: 'adjust',
+      badge: 'Điều chỉnh',
+      title: delta === 0 ? `Kiểm kê ${take.code}, không lệch sổ` : `Điều chỉnh theo kiểm kê ${take.code}`,
+      qtyLabel: `${delta > 0 ? '+' : ''}${delta.toLocaleString('vi-VN')} ${product.unit}`,
+      place: placeName(locations, take.locationId),
+      detail: line.reason || (delta === 0 ? 'Số đếm khớp sổ sách' : take.notes || 'Không ghi lý do'),
+      actorLabel: 'Người điều chỉnh',
+      actor: take.inspectorName,
+    });
+  });
+
+  manualAdjustments.forEach((item) => {
+    events.push({
+      id: item.id,
+      at: item.at,
+      sortKey: timeValue(item.at),
+      locationId: item.locationId,
+      kind: 'adjust',
+      badge: 'Điều chỉnh',
+      title: 'Điều chỉnh tồn trực tiếp',
+      qtyLabel: `${item.delta > 0 ? '+' : ''}${item.delta.toLocaleString('vi-VN')} ${product.unit}`,
+      place: placeName(locations, item.locationId),
+      detail: item.reason,
+      actorLabel: 'Người điều chỉnh',
+      actor: item.actor,
+    });
+  });
+
+  return events.sort((a, b) => b.sortKey - a.sortKey);
+};
+
+const PAGE_SIZES = [10, 20, 50];
+
+const ProductStockDetail: React.FC<{
+  product: Product | null;
+  locations: Location[];
+  orders: Order[];
+  purchaseOrders: PurchaseOrder[];
+  transfers: StockTransfer[];
+  stockTakes: StockTake[];
+  manualAdjustments: ManualAdjustment[];
+  workplaceId: string | null;
+  onClose: () => void;
+}> = ({ product, locations, orders, purchaseOrders, transfers, stockTakes, manualAdjustments, workplaceId, onClose }) => {
+  const [filter, setFilter] = useState<(typeof HISTORY_FILTERS)[number]['id']>('all');
+  const [pageSize, setPageSize] = useState(10);
+  const [locationId, setLocationId] = useState(workplaceId || 'ALL');
+  if (!product) return null;
+
+  const activeLocationId = workplaceId || locationId;
+  const workplace = workplaceId ? locations.find((item) => item.id === workplaceId) : null;
+  const history = buildHistory(product, locations, orders, purchaseOrders, transfers, stockTakes, manualAdjustments);
+  const matched = history.filter((event) => {
+    if (activeLocationId !== 'ALL' && event.locationId !== activeLocationId) return false;
+    if (filter === 'all') return true;
+    if (filter === 'transfer') return event.kind === 'transfer_out' || event.kind === 'transfer_in';
+    return event.kind === filter;
+  });
+  const visible = matched.slice(0, pageSize);
+
+  const info: { label: string; value: string }[] = [
+    { label: 'Danh mục', value: CATEGORY_LABEL[product.category] },
+    { label: 'Thương hiệu', value: product.brand },
+    { label: 'Xuất xứ', value: product.origin },
+    { label: 'Đơn vị tính', value: product.unit },
+    { label: 'Khối lượng', value: `${product.weightKg} kg` },
+    { label: 'Bảo hành', value: `${product.warrantyMonths} tháng` },
+    { label: 'Tồn tối thiểu', value: `${product.minStockAlert} ${product.unit}` },
+    { label: 'Giá vốn', value: `${product.baseCost.toLocaleString('vi-VN')} đ` },
+    { label: 'Giá lẻ', value: `${product.retailPrice.toLocaleString('vi-VN')} đ` },
+    { label: 'Giá đại lý', value: `${product.dealerPrice.toLocaleString('vi-VN')} đ` },
+    { label: 'Giá dự án', value: `${product.projectPrice.toLocaleString('vi-VN')} đ` },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col">
+        <div className="flex items-start justify-between gap-3 p-4 border-b border-slate-100">
+          <div>
+            <div className="font-mono text-[11px] font-semibold text-sky-700">{product.code}</div>
+            <h3 className="font-bold text-slate-900 text-sm mt-0.5">{product.name}</h3>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          <section className="space-y-3">
+            <h4 className="text-xs font-bold text-slate-900">Thông tin hàng hóa</h4>
+            <p className="text-xs text-slate-600">{product.description}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {info.map((item) => (
+                <div key={item.label} className="p-2.5 rounded-lg border border-slate-200 bg-slate-50">
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">{item.label}</div>
+                  <div className="text-xs font-semibold text-slate-900 mt-0.5">{item.value}</div>
+                </div>
+              ))}
+            </div>
+            {product.isCombo && product.comboComponents && (
+              <div className="text-xs text-slate-700">
+                <span className="font-semibold">Thành phần combo: </span>
+                {product.comboComponents.map((item) => `${item.quantity} ${item.productCode}`).join(', ')}
+              </div>
+            )}
+          </section>
+
+          <section className="space-y-2">
+            <h4 className="text-xs font-bold text-slate-900">Tồn theo điểm</h4>
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="py-2 px-3">Điểm</th>
+                    <th className="py-2 px-3 text-right">Tồn</th>
+                    <th className="py-2 px-3 text-right">Giữ chỗ</th>
+                    <th className="py-2 px-3 text-right">Khả dụng</th>
+                    <th className="py-2 px-3 text-right">Đang chuyển tới</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {locations.map((location) => {
+                    const stock = product.stockByLocation[location.id] || { onHand: 0, reserved: 0, inTransit: 0 };
+                    return (
+                      <tr key={location.id}>
+                        <td className="py-2 px-3 font-medium text-slate-900">{location.name}</td>
+                        <td className="py-2 px-3 text-right font-mono">{stock.onHand.toLocaleString('vi-VN')}</td>
+                        <td className="py-2 px-3 text-right font-mono text-amber-700">{stock.reserved.toLocaleString('vi-VN')}</td>
+                        <td className="py-2 px-3 text-right font-mono text-emerald-700">{Math.max(0, stock.onHand - stock.reserved).toLocaleString('vi-VN')}</td>
+                        <td className="py-2 px-3 text-right font-mono text-sky-700">{stock.inTransit.toLocaleString('vi-VN')}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h4 className="text-xs font-bold text-slate-900">Lịch sử thay đổi</h4>
+                <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg">
+                  {HISTORY_FILTERS.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setFilter(item.id)}
+                      className={`px-2.5 py-1 text-[11px] font-medium rounded-md ${
+                        filter === item.id ? 'bg-white text-slate-900 shadow-xs font-semibold' : 'text-slate-600'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+                <label className="block">
+                  <span className="block text-[11px] font-semibold text-slate-600 mb-1">Số dòng</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
+                  >
+                    {PAGE_SIZES.map((size) => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block flex-1">
+                  <span className="block text-[11px] font-semibold text-slate-600 mb-1">Địa điểm</span>
+                  <select
+                    value={activeLocationId}
+                    onChange={(e) => setLocationId(e.target.value)}
+                    disabled={Boolean(workplaceId)}
+                    className={`w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 ${
+                      workplaceId ? 'bg-slate-100 text-slate-600' : 'bg-white'
+                    }`}
+                  >
+                    {!workplaceId && <option value="ALL">Tất cả địa điểm</option>}
+                    {(workplace ? [workplace] : locations).map((location) => (
+                      <option key={location.id} value={location.id}>{location.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {workplace && (
+                <p className="text-[11px] text-slate-500">Chỉ xem lịch sử tại {workplace.name}, nơi bạn đang làm việc.</p>
+              )}
+              <p className="text-[11px] text-slate-400">Hiển thị {visible.length} / {matched.length} dòng</p>
+            </div>
+            {visible.length === 0 ? (
+              <div className="p-3 rounded-lg border border-dashed border-slate-300 text-xs text-slate-500">
+                Chưa có biến động nào cho bộ lọc này.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {visible.map((event) => (
+                  <div key={event.id} className="p-3 rounded-lg border border-slate-200 bg-white">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${historyTone[event.kind]}`}>{event.badge}</span>
+                          <span className="text-xs font-semibold text-slate-900">{event.title}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-1">{event.at} · {event.place}</div>
+                        <div className="text-[11px] text-slate-700 mt-1">{event.detail}</div>
+                        <div className="text-[11px] text-slate-600 mt-1">
+                          <span className="font-semibold">{event.actorLabel}: </span>
+                          {event.actor}
+                        </div>
+                      </div>
+                      <div className="shrink-0 font-mono text-xs font-bold text-slate-900">{event.qtyLabel}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
     </div>
   );
 };

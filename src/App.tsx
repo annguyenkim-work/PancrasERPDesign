@@ -11,6 +11,10 @@ import { DashboardView } from './components/dashboard/DashboardView';
 import { WarehouseView } from './components/inventory/WarehouseView';
 import { ProcurementView } from './components/procurement/ProcurementView';
 import { SalesView } from './components/sales/SalesView';
+import { QuoteView } from './components/quotes/QuoteView';
+import { CatalogView } from './components/catalog/CatalogView';
+import { CustomersView } from './components/customers/CustomersView';
+import { SuppliersView } from './components/suppliers/SuppliersView';
 import { ComboManagerView } from './components/combo/ComboManagerView';
 import { DebtView } from './components/debt/DebtView';
 import { WarrantyView } from './components/warranty/WarrantyView';
@@ -22,7 +26,11 @@ const TAB_TITLES: Record<TabKey, string> = {
   dashboard: 'Tổng quan Điều hành',
   warehouse: 'Quản lý Kho & Điều chuyển',
   procurement: 'Mua hàng & Container Nhập',
+  suppliers: 'Nhà cung cấp nhập khẩu',
+  catalog: 'Danh mục sản phẩm & giá',
+  customers: 'Danh bạ khách hàng',
   sales: 'Bán hàng (Lẻ - Đại lý - Dự án)',
+  quotes: 'Báo giá & Catalog',
   combo: 'Quản lý Combo Sản phẩm',
   debt: 'Quản lý Công nợ & Hạn mức',
   warranty: 'Bảo hành Điện tử (e-Warranty)',
@@ -56,7 +64,11 @@ const MainContent: React.FC = () => {
             {activeTab === 'dashboard' && <DashboardView />}
             {activeTab === 'warehouse' && <WarehouseView />}
             {activeTab === 'procurement' && <ProcurementView />}
+            {activeTab === 'suppliers' && <SuppliersView />}
+            {activeTab === 'catalog' && <CatalogView />}
+            {activeTab === 'customers' && <CustomersView />}
             {activeTab === 'sales' && <SalesView />}
+            {activeTab === 'quotes' && <QuoteView />}
             {activeTab === 'combo' && <ComboManagerView />}
             {activeTab === 'debt' && <DebtView />}
             {activeTab === 'warranty' && <WarrantyView />}

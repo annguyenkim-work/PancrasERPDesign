@@ -11,14 +11,22 @@ import {
   Users, 
   ClipboardList, 
   X,
-  Bath
+  Bath,
+  Package,
+  UserRound,
+  Factory,
+  FileText
 } from 'lucide-react';
 
 export type TabKey = 
   | 'dashboard'
   | 'warehouse'
   | 'procurement'
+  | 'suppliers'
   | 'sales'
+  | 'quotes'
+  | 'catalog'
+  | 'customers'
   | 'combo'
   | 'debt'
   | 'warranty'
@@ -67,12 +75,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
       section: 'VẬN HÀNH KHO BÃI',
     },
     {
+      key: 'suppliers' as TabKey,
+      label: 'Nhà cung cấp nhập khẩu',
+      icon: Factory,
+      section: 'VẬN HÀNH KHO BÃI',
+    },
+    {
+      key: 'catalog' as TabKey,
+      label: 'Danh mục sản phẩm & giá',
+      icon: Package,
+      section: 'KINH DOANH & PHÂN PHỐI',
+    },
+    {
+      key: 'customers' as TabKey,
+      label: 'Danh bạ khách hàng',
+      icon: UserRound,
+      section: 'KINH DOANH & PHÂN PHỐI',
+    },
+    {
       key: 'sales' as TabKey,
       label: 'Bán hàng (Lẻ - Đại lý - Dự án)',
       icon: ShoppingCart,
       section: 'KINH DOANH & PHÂN PHỐI',
       badge: pendingApprovalOrders > 0 ? `${pendingApprovalOrders} chờ duyệt` : undefined,
       badgeColor: 'bg-rose-100 text-rose-800',
+    },
+    {
+      key: 'quotes' as TabKey,
+      label: 'Báo giá & Catalog',
+      icon: FileText,
+      section: 'KINH DOANH & PHÂN PHỐI',
     },
     {
       key: 'combo' as TabKey,

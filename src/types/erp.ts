@@ -92,6 +92,7 @@ export interface Customer {
   // Cho khách hàng dự án
   projectName?: string;
   contractValue?: number;
+  milestones?: ProjectMilestone[];
 }
 
 export type OrderStatus = 
@@ -115,11 +116,17 @@ export interface OrderItem {
   isCombo?: boolean;
 }
 
+export interface MilestoneLine {
+  productId: string;
+  quantity: number;
+}
+
 export interface ProjectMilestone {
   id: string;
   name: string;
   deliveryDate: string;
   itemsSummary: string;
+  items?: MilestoneLine[];
   percentage: number;
   paymentAmount: number;
   deliveryStatus: 'pending' | 'shipping' | 'delivered';
@@ -152,6 +159,8 @@ export interface Order {
   deliveryDate?: string;
   // Dành riêng cho dự án
   contractCode?: string;
+  milestoneId?: string;
+  milestoneName?: string;
   projectMilestones?: ProjectMilestone[];
 }
 
@@ -322,7 +331,14 @@ export interface AuditLog {
     | 'ALLOCATE_LANDED_COST' 
     | 'DEBT_PAYMENT_COLLECT' 
     | 'WARRANTY_ACTIVATE' 
-    | 'WARRANTY_TICKET_UPDATE';
+    | 'WARRANTY_TICKET_UPDATE'
+    | 'CREATE_PRODUCT'
+    | 'CREATE_CUSTOMER'
+    | 'UPDATE_PROJECT_MILESTONES'
+    | 'CREATE_SUPPLIER'
+    | 'CREATE_COMBO'
+    | 'CREATE_EMPLOYEE'
+    | 'UPDATE_EMPLOYEE';
   locationName: string;
   details: string;
 }
