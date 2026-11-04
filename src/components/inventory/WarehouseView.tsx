@@ -155,11 +155,11 @@ export const WarehouseView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 max-w-full overflow-x-clip">
       {/* Top Header & Navigation Tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+      <div className="flex flex-col gap-4 bg-white p-4 sm:p-5 rounded-xl border border-slate-200 min-w-0">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
             Quản Lý Đa Kho &amp; Điều Chuyển Hàng Hóa
           </h1>
           <p className="text-xs text-slate-500 mt-1">
@@ -167,12 +167,12 @@ export const WarehouseView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
           {/* Segmented Tab Controls */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
+          <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg max-w-full min-w-0">
             <button
               onClick={() => setActiveTab('inventory')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+              className={`shrink-0 whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
                 activeTab === 'inventory' ? 'bg-white text-slate-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -181,7 +181,7 @@ export const WarehouseView: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('transfers')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+              className={`shrink-0 whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
                 activeTab === 'transfers' ? 'bg-white text-slate-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -190,7 +190,7 @@ export const WarehouseView: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('stocktake')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+              className={`shrink-0 whitespace-nowrap px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
                 activeTab === 'stocktake' ? 'bg-white text-slate-900 shadow-xs font-semibold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -201,7 +201,7 @@ export const WarehouseView: React.FC = () => {
 
           <button
             onClick={() => setShowTransferModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors shadow-xs"
+            className="shrink-0 self-start flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Tạo Phiếu Chuyển Kho</span>
@@ -213,16 +213,16 @@ export const WarehouseView: React.FC = () => {
       {activeTab === 'inventory' && (
         <div className="space-y-4">
           {/* Filter Bar */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
-            <div className="flex flex-1 items-center gap-3">
-              <div className="relative flex-1 max-w-sm">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shadow-xs min-w-0">
+            <div className="flex flex-1 flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 min-w-0">
+              <div className="relative w-full sm:flex-1 sm:min-w-[220px] sm:max-w-sm">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   placeholder="Tìm theo mã SKU, tên thiết bị, thương hiệu..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 bg-slate-50"
+                  className="w-full min-w-0 pl-9 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 bg-slate-50"
                 />
               </div>
 
@@ -230,7 +230,7 @@ export const WarehouseView: React.FC = () => {
               <select
                 value={selectedLocFilter}
                 onChange={(e) => setSelectedLocFilter(e.target.value)}
-                className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none"
+                className="w-full sm:w-auto sm:max-w-[240px] min-w-0 px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none"
               >
                 <option value="ALL">Toàn hệ thống (5 địa điểm)</option>
                 {locations.map((loc) => (
@@ -244,7 +244,7 @@ export const WarehouseView: React.FC = () => {
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none"
+                className="w-full sm:w-auto sm:max-w-[200px] min-w-0 px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white font-medium text-slate-700 focus:outline-none"
               >
                 <option value="ALL">Tất cả ngành hàng</option>
                 <option value="thiet_bi_ve_sinh">Thiết bị vệ sinh</option>
@@ -254,7 +254,7 @@ export const WarehouseView: React.FC = () => {
               </select>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between sm:justify-end gap-2">
               <span className="text-xs text-slate-500 font-medium">
                 {filteredProducts.length} mặt hàng
               </span>
@@ -269,9 +269,9 @@ export const WarehouseView: React.FC = () => {
           </div>
 
           {/* Table */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden min-w-0 max-w-full">
+            <div className="overflow-x-auto max-w-full">
+              <table className="w-full min-w-[920px] text-xs text-left">
                 <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
                   <tr>
                     <th className="py-3 px-4">Mã SKU</th>
@@ -310,7 +310,7 @@ export const WarehouseView: React.FC = () => {
 
                     return (
                       <tr key={p.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3 px-4 font-mono font-medium text-slate-900">{p.code}</td>
+                        <td className="py-3 px-4 font-mono font-medium text-slate-900 whitespace-nowrap">{p.code}</td>
                         <td className="py-3 px-4 max-w-sm">
                           <div className="font-semibold text-slate-900 line-clamp-1">{p.name}</div>
                           <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
@@ -394,10 +394,10 @@ export const WarehouseView: React.FC = () => {
       {/* TAB 2: TRANSFERS BETWEEN WAREHOUSES & SHOWROOMS */}
       {activeTab === 'transfers' && (
         <div className="space-y-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between shadow-xs">
-            <div className="flex items-center gap-2">
-              <Truck className="w-5 h-5 text-sky-600" />
-              <div>
+          <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs min-w-0">
+            <div className="flex items-start gap-2 min-w-0">
+              <Truck className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
+              <div className="min-w-0">
                 <h3 className="text-sm font-bold text-slate-900">
                   Lịch Sử Điều Chuyển Hàng Giữa Các Kho &amp; Showroom
                 </h3>
@@ -409,7 +409,7 @@ export const WarehouseView: React.FC = () => {
 
             <button
               onClick={() => setShowTransferModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors shadow-xs"
+              className="shrink-0 self-start flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors shadow-xs"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Tạo Phiếu Chuyển Kho</span>
@@ -447,20 +447,20 @@ export const WarehouseView: React.FC = () => {
                   </div>
 
                   {/* Route Visualizer */}
-                  <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200/70 text-xs">
-                    <div className="flex-1">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200/70 text-xs min-w-0">
+                    <div className="flex-1 min-w-0">
                       <div className="text-[10px] text-slate-400 uppercase font-semibold">Kho xuất hàng</div>
                       <div className="font-bold text-slate-900">{srcLoc?.name}</div>
                     </div>
 
-                    <div className="flex flex-col items-center px-4">
+                    <div className="flex sm:flex-col items-center gap-1 sm:gap-0 px-1 sm:px-4">
                       <ArrowLeftRight className={`w-4 h-4 ${isInTransit ? 'text-amber-500 animate-pulse' : 'text-slate-400'}`} />
-                      <span className="text-[10px] font-mono text-slate-400 mt-0.5">
+                      <span className="text-[10px] font-mono text-slate-400 sm:mt-0.5">
                         {isInTransit ? 'Đang trên xe' : 'Đã hoàn tất'}
                       </span>
                     </div>
 
-                    <div className="flex-1 text-right">
+                    <div className="flex-1 min-w-0 sm:text-right">
                       <div className="text-[10px] text-slate-400 uppercase font-semibold">Điểm tiếp nhận</div>
                       <div className="font-bold text-slate-900">{destLoc?.name}</div>
                     </div>
@@ -468,7 +468,7 @@ export const WarehouseView: React.FC = () => {
 
                   {/* Items List */}
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left">
+                    <table className="w-full min-w-[520px] text-xs text-left">
                       <thead className="bg-slate-100/60 text-slate-600">
                         <tr>
                           <th className="py-2 px-3">Mã SKU</th>
@@ -493,8 +493,8 @@ export const WarehouseView: React.FC = () => {
                   </div>
 
                   {/* Footer & Action button */}
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                    <div className="text-xs text-slate-500 italic">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                    <div className="text-xs text-slate-500 italic min-w-0">
                       {trf.notes ? `Ghi chú: ${trf.notes}` : 'Chuyển hàng định kỳ'}
                     </div>
 
@@ -525,10 +525,10 @@ export const WarehouseView: React.FC = () => {
       {/* TAB 3: STOCK TAKE & INVENTORY AUDITS */}
       {activeTab === 'stocktake' && (
         <div className="space-y-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between shadow-xs">
-            <div className="flex items-center gap-2">
-              <ClipboardCheck className="w-5 h-5 text-indigo-600" />
-              <div>
+          <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs min-w-0">
+            <div className="flex items-start gap-2 min-w-0">
+              <ClipboardCheck className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+              <div className="min-w-0">
                 <h3 className="text-sm font-bold text-slate-900">Kiểm Kê Kho Định Kỳ &amp; Cân Đối Tồn Kho</h3>
                 <p className="text-xs text-slate-500">
                   Ghi nhận chênh lệch kiểm đếm thực tế và sổ sách ERP, phê duyệt điều chỉnh số liệu tự động.
@@ -571,7 +571,7 @@ export const WarehouseView: React.FC = () => {
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left">
+                    <table className="w-full min-w-[720px] text-xs text-left">
                       <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
                         <tr>
                           <th className="py-2.5 px-3">Mã SKU</th>
@@ -609,8 +609,8 @@ export const WarehouseView: React.FC = () => {
                     </table>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                    <div className="text-xs text-slate-500">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                    <div className="text-xs text-slate-500 min-w-0">
                       Ghi chú: {st.notes}
                     </div>
 
