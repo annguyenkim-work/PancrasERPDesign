@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useErp } from '../../context/ErpContext';
 import { Product, ProductCategory } from '../../types/erp';
 import { Package, Plus, Search, X } from 'lucide-react';
+import { MoneyInput } from '../common/MoneyInput';
 
 const CATEGORY_LABEL: Record<ProductCategory, string> = {
   thiet_bi_ve_sinh: 'Thiết bị vệ sinh',
@@ -251,16 +252,16 @@ export const CatalogView: React.FC = () => {
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <Field label="Giá vốn (đ)">
-                  <input type="number" min={0} required value={form.baseCost} onChange={(e) => setField('baseCost', Number(e.target.value))} className={inputClass} />
+                  <MoneyInput value={form.baseCost} onChange={(value) => setField('baseCost', value)} className={`${inputClass} font-mono`} />
                 </Field>
                 <Field label="Giá lẻ (đ)">
-                  <input type="number" min={0} required value={form.retailPrice} onChange={(e) => setField('retailPrice', Number(e.target.value))} className={inputClass} />
+                  <MoneyInput value={form.retailPrice} onChange={(value) => setField('retailPrice', value)} className={`${inputClass} font-mono`} />
                 </Field>
                 <Field label="Giá đại lý (đ)">
-                  <input type="number" min={0} required value={form.dealerPrice} onChange={(e) => setField('dealerPrice', Number(e.target.value))} className={inputClass} />
+                  <MoneyInput value={form.dealerPrice} onChange={(value) => setField('dealerPrice', value)} className={`${inputClass} font-mono`} />
                 </Field>
                 <Field label="Giá dự án (đ)">
-                  <input type="number" min={0} required value={form.projectPrice} onChange={(e) => setField('projectPrice', Number(e.target.value))} className={inputClass} />
+                  <MoneyInput value={form.projectPrice} onChange={(value) => setField('projectPrice', value)} className={`${inputClass} font-mono`} />
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-3">

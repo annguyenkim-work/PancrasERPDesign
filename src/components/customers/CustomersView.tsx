@@ -2,11 +2,20 @@ import React, { useState } from 'react';
 import { useErp } from '../../context/ErpContext';
 import { Customer, CustomerType, Product, ProjectMilestone } from '../../types/erp';
 import { Plus, Search, UserRound, X } from 'lucide-react';
+import { MoneyInput } from '../common/MoneyInput';
 
 const TYPE_LABEL: Record<CustomerType, string> = {
   retail: 'Khách lẻ',
   dealer: 'Đại lý',
+  distributor: 'Nhà phân phối',
   project: 'Dự án',
+};
+
+const typeBadgeClass = (type: CustomerType) => {
+  if (type === 'retail') return 'bg-slate-100 text-slate-700';
+  if (type === 'dealer') return 'bg-blue-50 text-blue-800';
+  if (type === 'distributor') return 'bg-amber-50 text-amber-800';
+  return 'bg-purple-50 text-purple-800';
 };
 
 interface MilestoneDraft {
@@ -109,6 +118,7 @@ export const CustomersView: React.FC = () => {
     all: customers.length,
     retail: customers.filter((c) => c.type === 'retail').length,
     dealer: customers.filter((c) => c.type === 'dealer').length,
+    distributor: customers.filter((c) => c.type === 'distributor').length,
     project: customers.filter((c) => c.type === 'project').length,
   };
 
@@ -166,7 +176,7 @@ export const CustomersView: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Danh Bạ Khách Hàng (Lẻ · Đại Lý · Dự Án)</h1>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Danh Bạ Khách Hàng (Lẻ · Đại lý · Nhà phân phối · Dự án)</h1>
           <p className="text-xs text-slate-500 mt-1">
             Hồ sơ dự án có các đợt bàn giao. Khi lập đơn, chọn đợt để lấy sẵn mặt hàng và số lượng.
           </p>
@@ -188,16 +198,17 @@ export const CustomersView: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <Stat label="Tổng hồ sơ" value={String(counts.all)} />
         <Stat label="Khách lẻ" value={String(counts.retail)} />
         <Stat label="Đại lý" value={String(counts.dealer)} />
+        <Stat label="Nhà phân phối" value={String(counts.distributor)} />
         <Stat label="Dự án" value={String(counts.project)} />
       </div>
 
       <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
-        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
-          {(['all', 'retail', 'dealer', 'project'] as const).map((key) => (
+        <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg">
+          {(['all', 'retail', 'dealer', 'distributor', 'project'] as const).map((key) => (
             <button
               key={key}
               onClick={() => setTypeFilter(key)}
@@ -257,9 +268,7 @@ export const CustomersView: React.FC = () => {
                     )}
                   </td>
                   <td className="py-3 px-3">
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
-                      c.type === 'retail' ? 'bg-slate-100 text-slate-700' : c.type === 'dealer' ? 'bg-blue-50 text-blue-800' : 'bg-purple-50 text-purple-800'
-                    }`}>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${typeBadgeClass(c.type)}`}>
                       {TYPE_LABEL[c.type]}
                     </span>
                   </td>
@@ -287,13 +296,13 @@ export const CustomersView: React.FC = () => {
               </button>
             </div>
             <form onSubmit={handleCreate} className="flex-1 overflow-y-auto p-5 space-y-4">
-              <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
-                {(['retail', 'dealer', 'project'] as const).map((key) => (
+              <div className="flex flex-wrap gap-1 p-1 bg-slate-100 rounded-lg">
+                {(['retail', 'dealer', 'distributor', 'project'] as const).map((key) => (
                   <button
                     key={key}
                     type="button"
                     onClick={() => setForm((current) => ({ ...current, type: key }))}
-                    className={`flex-1 py-1.5 text-xs font-medium rounded-md ${
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md ${
                       form.type === key ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-600'
                     }`}
                   >
@@ -301,6 +310,11 @@ export const CustomersView: React.FC = () => {
                   </button>
                 ))}
               </div>
+              {form.type === 'distributor' && (
+                <p className="text-[11px] text-amber-800">
+                  Nhà phân phối dùng hạn mức, kỳ hạn và chiết khấu như đại lý. Không có đợt bàn giao của dự án.
+                </p>
+              )}
               <label className="block">
                 <span className="block text-xs font-semibold text-slate-700 mb-1">Tên khách hàng</span>
                 <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300" />
@@ -327,7 +341,7 @@ export const CustomersView: React.FC = () => {
                   </label>
                   <label className="block">
                     <span className="block text-xs font-semibold text-slate-700 mb-1">Hạn mức (đ)</span>
-                    <input type="number" min={0} value={form.creditLimit} onChange={(e) => setForm({ ...form, creditLimit: Number(e.target.value) })} className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300" />
+                    <MoneyInput value={form.creditLimit} onChange={(creditLimit) => setForm({ ...form, creditLimit })} className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 font-mono" />
                   </label>
                   <label className="block">
                     <span className="block text-xs font-semibold text-slate-700 mb-1">Kỳ hạn (ngày)</span>
@@ -347,7 +361,7 @@ export const CustomersView: React.FC = () => {
                   </label>
                   <label className="block">
                     <span className="block text-xs font-semibold text-slate-700 mb-1">Giá trị hợp đồng (đ)</span>
-                    <input type="number" min={0} value={form.contractValue} onChange={(e) => setForm({ ...form, contractValue: Number(e.target.value) })} className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300" />
+                    <MoneyInput value={form.contractValue} onChange={(contractValue) => setForm({ ...form, contractValue })} className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 font-mono" />
                   </label>
                 </div>
               )}

@@ -16,6 +16,7 @@ import {
   Unlock,
   Check
 } from 'lucide-react';
+import { MoneyInput } from '../common/MoneyInput';
 
 export const DebtView: React.FC = () => {
   const { 
@@ -28,7 +29,7 @@ export const DebtView: React.FC = () => {
   } = useErp();
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'dealer' | 'project'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'dealer' | 'distributor' | 'project'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'blocked' | 'warning'>('all');
 
   // Modals state
@@ -86,7 +87,7 @@ export const DebtView: React.FC = () => {
     const rows = filteredCustomers.map((c) => [
       c.code,
       c.name,
-      c.type === 'dealer' ? 'Đại lý' : 'Dự án',
+      c.type === 'dealer' ? 'Đại lý' : c.type === 'distributor' ? 'Nhà phân phối' : 'Dự án',
       c.creditLimit,
       c.currentDebt,
       Math.max(0, c.creditLimit - c.currentDebt),
@@ -102,7 +103,7 @@ export const DebtView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200">
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-            Quản Lý Công Nợ Đại Lý &amp; Khách Hàng Dự Án
+            Quản Lý Công Nợ Đại Lý, Nhà Phân Phối &amp; Dự Án
           </h1>
           <p className="text-xs text-slate-500 mt-1">
             Thiết lập hạn mức tín dụng (Credit Limit), thời hạn thanh toán (Payment Terms), tự động chặn đơn và thu tiền gạch nợ.
@@ -125,7 +126,7 @@ export const DebtView: React.FC = () => {
             {totalDebt.toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-500">VNĐ</span>
           </div>
           <div className="text-xs text-slate-500 mt-1">
-            Phải thu từ {b2bCustomers.length} đại lý và nhà thầu dự án
+            Phải thu từ {b2bCustomers.length} đại lý, nhà phân phối và nhà thầu dự án
           </div>
         </div>
 
@@ -171,6 +172,7 @@ export const DebtView: React.FC = () => {
           >
             <option value="all">Tất cả phân loại</option>
             <option value="dealer">Chỉ Đại lý B2B</option>
+            <option value="distributor">Chỉ Nhà phân phối</option>
             <option value="project">Chỉ Khách hàng Dự án</option>
           </select>
 
@@ -222,10 +224,14 @@ export const DebtView: React.FC = () => {
                     <td className="py-3.5 px-3 text-center">
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                          cust.type === 'project' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                          cust.type === 'project'
+                            ? 'bg-purple-100 text-purple-800'
+                            : cust.type === 'distributor'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-blue-100 text-blue-800'
                         }`}
                       >
-                        {cust.type === 'project' ? 'DỰ ÁN' : 'ĐẠI LÝ'}
+                        {cust.type === 'project' ? 'DỰ ÁN' : cust.type === 'distributor' ? 'NHÀ PHÂN PHỐI' : 'ĐẠI LÝ'}
                       </span>
                     </td>
                     <td className="py-3.5 px-3 text-right font-mono tabular-nums text-slate-700 font-medium">
@@ -321,14 +327,12 @@ export const DebtView: React.FC = () => {
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Số tiền thanh toán (VNĐ)</label>
-                <input
-                  type="number"
-                  min="1000"
+                <MoneyInput
+                  min={0}
                   max={selectedCustForPayment.currentDebt}
                   value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(parseInt(e.target.value) || 0)}
+                  onChange={setPaymentAmount}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono font-bold text-slate-900"
-                  required
                 />
               </div>
 
@@ -390,13 +394,10 @@ export const DebtView: React.FC = () => {
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Hạn mức công nợ tối đa (VNĐ)</label>
-                <input
-                  type="number"
-                  step="10000000"
+                <MoneyInput
                   value={newCreditLimit}
-                  onChange={(e) => setNewCreditLimit(parseInt(e.target.value) || 0)}
+                  onChange={setNewCreditLimit}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono font-bold"
-                  required
                 />
               </div>
 

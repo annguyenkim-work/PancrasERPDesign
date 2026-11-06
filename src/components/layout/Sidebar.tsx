@@ -99,7 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       key: 'sales' as TabKey,
-      label: 'Bán hàng (Lẻ - Đại lý - Dự án)',
+      label: 'Bán hàng (Lẻ - Đại lý - NPP - Dự án)',
       icon: ShoppingCart,
       section: 'KINH DOANH & PHÂN PHỐI',
       badge: pendingApprovalOrders > 0 ? `${pendingApprovalOrders} chờ duyệt` : undefined,

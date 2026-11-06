@@ -12,13 +12,14 @@ type QuoteLine = {
 const CHANNEL_LABEL: Record<CustomerType, string> = {
   retail: 'Khách lẻ',
   dealer: 'Đại lý',
+  distributor: 'Nhà phân phối',
   project: 'Dự án',
 };
 
 const money = (n: number) => `${Math.round(n).toLocaleString('vi-VN')} đ`;
 
 const listPriceOf = (product: Product, channel: CustomerType) => {
-  if (channel === 'dealer') return product.dealerPrice;
+  if (channel === 'dealer' || channel === 'distributor') return product.dealerPrice;
   if (channel === 'project') return product.projectPrice;
   return product.retailPrice;
 };
@@ -145,6 +146,20 @@ export const QuoteView: React.FC = () => {
         </article>`;
     }).join('');
 
+    const payload = JSON.stringify({
+      kind: 'pancras-quote',
+      code,
+      channel,
+      customerName: customerName.trim(),
+      customerPhone,
+      customerAddress,
+      lines: pricedLines.map((line) => ({
+        productCode: line.product!.code,
+        quantity: line.quantity,
+        unitPrice: line.netUnit,
+      })),
+    }).replace(/</g, '\\u003c');
+
     const html = `<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -213,6 +228,7 @@ export const QuoteView: React.FC = () => {
     </table>
     <footer>${escapeHtml(notes)}<br/>Báo giá này chưa phải đơn hàng. Giá vốn và tồn kho không bị thay đổi.</footer>
   </div>
+  <script type="application/json" id="pancras-quote">${payload}</script>
 </body>
 </html>`;
 
@@ -242,7 +258,7 @@ export const QuoteView: React.FC = () => {
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">Lập Bảng Báo Giá &amp; Catalog</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Chọn mặt hàng theo bảng giá lẻ, đại lý hoặc dự án, nhập chiết khấu, rồi xuất file catalog gửi khách.
+            Chọn mặt hàng theo bảng giá lẻ, đại lý, nhà phân phối hoặc dự án, nhập chiết khấu, rồi xuất file catalog gửi khách.
           </p>
         </div>
         <button
@@ -255,13 +271,13 @@ export const QuoteView: React.FC = () => {
       </div>
 
       <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
-        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
-          {(['retail', 'dealer', 'project'] as const).map((key) => (
+        <div className="flex flex-wrap gap-1 p-1 bg-slate-100 rounded-lg">
+          {(['retail', 'dealer', 'distributor', 'project'] as const).map((key) => (
             <button
               key={key}
               type="button"
               onClick={() => handleChannel(key)}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-md ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-md ${
                 channel === key ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-600'
               }`}
             >
@@ -269,6 +285,11 @@ export const QuoteView: React.FC = () => {
             </button>
           ))}
         </div>
+        {channel === 'distributor' && (
+          <p className="text-[11px] text-amber-800">
+            Báo giá nhà phân phối đang lấy bảng giá đại lý. Kênh giá riêng chưa được chốt.
+          </p>
+        )}
 
         {channel !== 'retail' && (
           <label className="block">

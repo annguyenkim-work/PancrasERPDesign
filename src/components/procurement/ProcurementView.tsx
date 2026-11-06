@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useErp } from '../../context/ErpContext';
 import { PurchaseOrder, POLandedCostItem } from '../../types/erp';
+import { MoneyInput } from '../common/MoneyInput';
 import { 
   Container, 
   Ship, 
@@ -22,6 +23,7 @@ interface NewPOItemInput {
   productId: string;
   quantity: number;
   unitPriceUSD: number;
+  importDutyPercent: number;
 }
 
 export const ProcurementView: React.FC = () => {
@@ -52,13 +54,12 @@ export const ProcurementView: React.FC = () => {
 
   // Multiple items state for the PO
   const [poItems, setPoItems] = useState<NewPOItemInput[]>([
-    { productId: products[0]?.id || 'P001', quantity: 60, unitPriceUSD: 520 },
-    { productId: products[1]?.id || 'P002', quantity: 100, unitPriceUSD: 195 },
-    { productId: products[5]?.id || 'P006', quantity: 200, unitPriceUSD: 36 },
+    { productId: products[0]?.id || 'P001', quantity: 60, unitPriceUSD: 520, importDutyPercent: 15 },
+    { productId: products[1]?.id || 'P002', quantity: 100, unitPriceUSD: 195, importDutyPercent: 10 },
+    { productId: products[5]?.id || 'P006', quantity: 200, unitPriceUSD: 36, importDutyPercent: 8 },
   ]);
 
-  // Import landed costs breakdown state
-  const [importTaxAmount, setImportTaxAmount] = useState(250000000);
+  const [vatRate, setVatRate] = useState(10);
   const [oceanFreightAmount, setOceanFreightAmount] = useState(80000000);
   const [portHandlingAmount, setPortHandlingAmount] = useState(35000000);
   const [inspectionAmount, setInspectionAmount] = useState(25000000);
@@ -66,11 +67,10 @@ export const ProcurementView: React.FC = () => {
 
   // Helper calculations for dynamic multi-item allocation
   const calculateAllocations = () => {
-    const totalExtraCost = 
-      importTaxAmount + 
-      oceanFreightAmount + 
-      portHandlingAmount + 
-      inspectionAmount + 
+    const logisticsCost =
+      oceanFreightAmount +
+      portHandlingAmount +
+      inspectionAmount +
       domesticTransportAmount;
 
     let totalMerchandiseFobVND = 0;
@@ -96,33 +96,42 @@ export const ProcurementView: React.FC = () => {
       };
     });
 
-    // Allocate landed cost to each item
     const allocatedItems = itemsSummary.map((item) => {
-      let allocatedCostVND = 0;
+      let logisticsShare = 0;
       if (allocationMethod === 'by_value') {
         const ratio = totalMerchandiseFobVND > 0 ? item.fobVND / totalMerchandiseFobVND : 0;
-        allocatedCostVND = Math.round(totalExtraCost * ratio);
+        logisticsShare = Math.round(logisticsCost * ratio);
       } else {
         const ratio = totalContainerWeightKg > 0 ? item.weightKg / totalContainerWeightKg : 0;
-        allocatedCostVND = Math.round(totalExtraCost * ratio);
+        logisticsShare = Math.round(logisticsCost * ratio);
       }
 
-      const totalItemLandedCost = item.fobVND + allocatedCostVND;
+      const dutyAmountVND = Math.round(item.fobVND * (item.importDutyPercent || 0) / 100);
+      const vatAmountVND = Math.round((item.fobVND + dutyAmountVND) * vatRate / 100);
+      const totalItemLandedCost = item.fobVND + dutyAmountVND + vatAmountVND + logisticsShare;
       const finalUnitLandedCost = Math.round(totalItemLandedCost / (item.quantity || 1));
 
       return {
         ...item,
-        allocatedCostVND,
+        allocatedCostVND: logisticsShare,
+        dutyAmountVND,
+        vatAmountVND,
         finalUnitLandedCost,
       };
     });
 
+    const totalDutyVND = allocatedItems.reduce((sum, item) => sum + item.dutyAmountVND, 0);
+    const totalVatVND = allocatedItems.reduce((sum, item) => sum + item.vatAmountVND, 0);
+    const totalExtraCost = totalDutyVND + totalVatVND + logisticsCost;
     const grandTotalCostVND = totalMerchandiseFobVND + totalExtraCost;
 
     return {
       allocatedItems,
       totalMerchandiseFobVND,
       totalContainerWeightKg,
+      totalDutyVND,
+      totalVatVND,
+      logisticsCost,
       totalExtraCost,
       grandTotalCostVND,
     };
@@ -139,6 +148,7 @@ export const ProcurementView: React.FC = () => {
         productId: nextProd.id,
         quantity: 50,
         unitPriceUSD: Math.round(nextProd.baseCost / exchangeRate),
+        importDutyPercent: 10,
       },
     ]);
   };
@@ -162,10 +172,11 @@ export const ProcurementView: React.FC = () => {
     }
 
     const sup = suppliers.find((s) => s.id === supplierId);
-    const { allocatedItems, totalMerchandiseFobVND, totalExtraCost, grandTotalCostVND } = calculateAllocations();
+    const { allocatedItems, totalMerchandiseFobVND, totalDutyVND, totalVatVND, totalExtraCost, grandTotalCostVND } = calculateAllocations();
 
     const landedCostsList: POLandedCostItem[] = [
-      { type: 'import_tax', name: 'Thuế nhập khẩu ưu đãi & VAT hải quan', amount: importTaxAmount, allocationMethod },
+      { type: 'import_tax', name: 'Thuế nhập khẩu theo suất từng mặt hàng', amount: totalDutyVND, allocationMethod },
+      { type: 'vat', name: `VAT ${vatRate}% chung cả đơn`, amount: totalVatVND, allocationMethod: 'by_value' },
       { type: 'ocean_freight', name: 'Cước vận tải biển quốc tế (Ocean Freight)', amount: oceanFreightAmount, allocationMethod },
       { type: 'port_handling', name: 'Phí THC & nâng hạ bãi cảng', amount: portHandlingAmount, allocationMethod },
       { type: 'inspection', name: 'Phí kiểm định chất lượng sản phẩm QCVN', amount: inspectionAmount, allocationMethod },
@@ -181,6 +192,7 @@ export const ProcurementView: React.FC = () => {
       exchangeRate,
       fobAmountVND: it.fobVND,
       weightKg: it.weightKg,
+      importDutyPercent: it.importDutyPercent,
       allocatedCostVND: it.allocatedCostVND,
       finalUnitLandedCost: it.finalUnitLandedCost,
     }));
@@ -195,6 +207,7 @@ export const ProcurementView: React.FC = () => {
       destinationPort,
       expectedArrivalDate: expectedArrival,
       status: 'shipping',
+      vatRate,
       items: finalPoItems,
       landedCosts: landedCostsList,
       totalMerchandiseVND: totalMerchandiseFobVND,
@@ -380,6 +393,7 @@ export const ProcurementView: React.FC = () => {
                         <th className="py-2.5 px-3">Tên sản phẩm</th>
                         <th className="py-2.5 px-2 text-right">SL</th>
                         <th className="py-2.5 px-3 text-right">Giá FOB (USD)</th>
+                        <th className="py-2.5 px-3 text-right">Thuế NK</th>
                         <th className="py-2.5 px-3 text-right">Chi phí phân bổ</th>
                         <th className="py-2.5 px-3 text-right">Giá vốn nhập (VND)</th>
                       </tr>
@@ -397,6 +411,9 @@ export const ProcurementView: React.FC = () => {
                             <div className="text-[10px] text-slate-400">
                               ({(it.fobAmountVND / 1000000).toFixed(1)} tr đ)
                             </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono tabular-nums text-amber-800 font-semibold">
+                            {it.importDutyPercent != null ? `${it.importDutyPercent}%` : '—'}
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono tabular-nums text-amber-700 font-semibold">
                             +{it.allocatedCostVND.toLocaleString('vi-VN')} đ
@@ -419,7 +436,7 @@ export const ProcurementView: React.FC = () => {
                     <span>Bảng Chi Phí Nhập Khẩu &amp; Phân Bổ (Landed Cost Breakdown)</span>
                   </h3>
                   <span className="text-[11px] text-slate-400">
-                    Phân bổ tỷ lệ thuận theo giá trị hàng hóa
+                    Thuế nhập khẩu tách khỏi VAT. Phí tàu, cảng, kiểm định và kéo xe vẫn là chi phí chung của container.
                   </span>
                 </div>
 
@@ -466,7 +483,7 @@ export const ProcurementView: React.FC = () => {
       {/* MODAL: TẠO ĐƠN MUA HÀNG & CONTAINER (HỖ TRỢ NHIỀU MẶT HÀNG) */}
       {showNewPOModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-7xl max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Container className="w-5 h-5 text-sky-600" />
@@ -510,12 +527,11 @@ export const ProcurementView: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Tỷ giá USD / VNĐ</label>
-                  <input
-                    type="number"
+                  <MoneyInput
                     value={exchangeRate}
-                    onChange={(e) => setExchangeRate(parseInt(e.target.value) || 25400)}
+                    onChange={(next) => { if (next > 0) setExchangeRate(next); }}
+                    unit="đ"
                     className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 font-mono font-bold"
-                    required
                   />
                 </div>
 
@@ -596,7 +612,7 @@ export const ProcurementView: React.FC = () => {
                       <span>Danh Sách Các Mặt Hàng Đặt Mua Trong Container ({poItems.length} mặt hàng)</span>
                     </h4>
                     <span className="text-[11px] text-slate-500">
-                      Cho phép nhập nhiều mặt hàng thiết bị vệ sinh, gạch, tủ chậu trong cùng một đơn PO
+                      Thuế nhập khẩu nhập theo từng mặt hàng. VAT dùng một suất cho cả đơn.
                     </span>
                   </div>
 
@@ -611,14 +627,16 @@ export const ProcurementView: React.FC = () => {
                 </div>
 
                 <div className="overflow-x-auto border border-slate-200 rounded-lg bg-white">
-                  <table className="w-full text-xs text-left">
+                  <table className="w-full min-w-[1280px] text-xs text-left">
                     <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                       <tr>
-                        <th className="py-2.5 px-3">Sản phẩm / Thiết bị</th>
+                        <th className="py-2.5 px-3 min-w-[420px]">Sản phẩm / Thiết bị</th>
                         <th className="py-2.5 px-2 text-right w-24">Số lượng</th>
                         <th className="py-2.5 px-3 text-right w-32">Đơn giá FOB (USD)</th>
                         <th className="py-2.5 px-3 text-right">FOB (VNĐ)</th>
-                        <th className="py-2.5 px-3 text-right">Phân bổ chi phí</th>
+                        <th className="py-2.5 px-2 text-right w-24">Thuế NK %</th>
+                        <th className="py-2.5 px-3 text-right">Tiền thuế NK</th>
+                        <th className="py-2.5 px-3 text-right">Phí logistics</th>
                         <th className="py-2.5 px-3 text-right font-bold text-emerald-800">Giá vốn dự kiến</th>
                         <th className="py-2.5 px-2 text-center w-10"></th>
                       </tr>
@@ -626,11 +644,12 @@ export const ProcurementView: React.FC = () => {
                     <tbody className="divide-y divide-slate-100">
                       {currentCalc.allocatedItems.map((item, idx) => (
                         <tr key={idx} className="hover:bg-slate-50">
-                          <td className="py-2 px-3">
+                          <td className="py-2 px-3 min-w-[420px]">
                             <select
                               value={item.productId}
                               onChange={(e) => handleUpdateItem(idx, 'productId', e.target.value)}
-                              className="w-full px-2 py-1 text-xs rounded border border-slate-300 bg-white"
+                              title={item.productName}
+                              className="w-full min-w-[400px] px-2 py-1 text-xs rounded border border-slate-300 bg-white"
                             >
                               {products.map((p) => (
                                 <option key={p.id} value={p.id}>
@@ -650,25 +669,36 @@ export const ProcurementView: React.FC = () => {
                             />
                           </td>
 
-                          <td className="py-2 px-3 text-right">
-                            <div className="relative">
-                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400">$</span>
-                              <input
-                                type="number"
-                                min="0.1"
-                                step="0.1"
-                                value={item.unitPriceUSD}
-                                onChange={(e) => handleUpdateItem(idx, 'unitPriceUSD', parseFloat(e.target.value) || 0)}
-                                className="w-full pl-6 pr-2 py-1 text-xs rounded border border-slate-300 text-right font-mono"
-                              />
-                            </div>
+                          <td className="py-2 px-3 text-right min-w-[140px]">
+                            <MoneyInput
+                              value={item.unitPriceUSD}
+                              onChange={(next) => handleUpdateItem(idx, 'unitPriceUSD', next)}
+                              unit="USD"
+                              decimals
+                              className="w-full px-2 py-1 text-xs rounded border border-slate-300 text-right font-mono"
+                            />
                           </td>
 
                           <td className="py-2 px-3 text-right font-mono tabular-nums text-slate-800">
                             {item.fobVND.toLocaleString('vi-VN')} đ
                           </td>
 
-                          <td className="py-2 px-3 text-right font-mono tabular-nums text-amber-700 font-medium">
+                          <td className="py-2 px-2 text-right">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.1"
+                              value={item.importDutyPercent}
+                              onChange={(e) => handleUpdateItem(idx, 'importDutyPercent', Math.max(0, parseFloat(e.target.value) || 0))}
+                              className="w-full px-2 py-1 text-xs rounded border border-amber-300 text-right font-mono bg-amber-50"
+                            />
+                          </td>
+
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-amber-800 font-medium">
+                            {item.dutyAmountVND.toLocaleString('vi-VN')} đ
+                          </td>
+
+                          <td className="py-2 px-3 text-right font-mono tabular-nums text-slate-600">
                             +{item.allocatedCostVND.toLocaleString('vi-VN')} đ
                           </td>
 
@@ -694,11 +724,9 @@ export const ProcurementView: React.FC = () => {
                   </table>
                 </div>
 
-                <div className="flex justify-between items-center text-xs px-1 text-slate-600">
-                  <span>Tổng tiền hàng FOB (chưa gồm chi phí):</span>
-                  <span className="font-mono font-bold text-slate-900 text-sm">
-                    {currentCalc.totalMerchandiseFobVND.toLocaleString('vi-VN')} đ
-                  </span>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs px-1 text-slate-600">
+                  <span>FOB {currentCalc.totalMerchandiseFobVND.toLocaleString('vi-VN')} đ · Thuế NK {currentCalc.totalDutyVND.toLocaleString('vi-VN')} đ · VAT {vatRate}% {currentCalc.totalVatVND.toLocaleString('vi-VN')} đ</span>
+                  <span className="text-[11px] text-slate-400">Giá vốn minh họa cộng FOB, thuế NK của dòng, VAT chung và phí logistics. Cách tính VAT và phân bổ phí chưa chốt.</span>
                 </div>
               </div>
 
@@ -707,7 +735,7 @@ export const ProcurementView: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
                     <Calculator className="w-4 h-4 text-amber-700" />
-                    <span>Chi Phí Nhập Khẩu &amp; Logistics Biển Cần Phân Bổ (VND)</span>
+                    <span>VAT chung và phí logistics của container</span>
                   </h4>
                   <span className="text-[11px] text-amber-800 font-semibold">
                     Tổng chi phí: {currentCalc.totalExtraCost.toLocaleString('vi-VN')} đ
@@ -717,26 +745,27 @@ export const ProcurementView: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                   <div>
                     <label className="block text-[11px] font-medium text-slate-700 mb-1">
-                      1. Thuế nhập khẩu + VAT hải quan
+                      Thuế VAT (%)
                     </label>
                     <input
                       type="number"
-                      step="1000000"
-                      value={importTaxAmount}
-                      onChange={(e) => setImportTaxAmount(parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 font-mono"
+                      min="0"
+                      step="0.1"
+                      value={vatRate}
+                      onChange={(e) => setVatRate(Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-amber-300 font-mono bg-white"
                     />
+                    <p className="text-[10px] text-amber-800 mt-1">Một suất cho mọi dòng. Thuế nhập khẩu nằm trên từng mặt hàng.</p>
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-medium text-slate-700 mb-1">
                       2. Cước tàu biển quốc tế (Ocean Freight)
                     </label>
-                    <input
-                      type="number"
-                      step="1000000"
+                    <MoneyInput
                       value={oceanFreightAmount}
-                      onChange={(e) => setOceanFreightAmount(parseInt(e.target.value) || 0)}
+                      onChange={setOceanFreightAmount}
+                      unit="đ"
                       className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 font-mono"
                     />
                   </div>
@@ -745,11 +774,10 @@ export const ProcurementView: React.FC = () => {
                     <label className="block text-[11px] font-medium text-slate-700 mb-1">
                       3. Phí nâng hạ bãi cảng (THC, D/O, vệ sinh cont)
                     </label>
-                    <input
-                      type="number"
-                      step="1000000"
+                    <MoneyInput
                       value={portHandlingAmount}
-                      onChange={(e) => setPortHandlingAmount(parseInt(e.target.value) || 0)}
+                      onChange={setPortHandlingAmount}
+                      unit="đ"
                       className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 font-mono"
                     />
                   </div>
@@ -758,11 +786,10 @@ export const ProcurementView: React.FC = () => {
                     <label className="block text-[11px] font-medium text-slate-700 mb-1">
                       4. Phí kiểm định chất lượng sản phẩm
                     </label>
-                    <input
-                      type="number"
-                      step="1000000"
+                    <MoneyInput
                       value={inspectionAmount}
-                      onChange={(e) => setInspectionAmount(parseInt(e.target.value) || 0)}
+                      onChange={setInspectionAmount}
+                      unit="đ"
                       className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 font-mono"
                     />
                   </div>
@@ -771,11 +798,10 @@ export const ProcurementView: React.FC = () => {
                     <label className="block text-[11px] font-medium text-slate-700 mb-1">
                       5. Vận chuyển kéo xe container từ cảng về kho
                     </label>
-                    <input
-                      type="number"
-                      step="1000000"
+                    <MoneyInput
                       value={domesticTransportAmount}
-                      onChange={(e) => setDomesticTransportAmount(parseInt(e.target.value) || 0)}
+                      onChange={setDomesticTransportAmount}
+                      unit="đ"
                       className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 font-mono"
                     />
                   </div>
@@ -793,7 +819,8 @@ export const ProcurementView: React.FC = () => {
 
                 <div className="text-right text-slate-400">
                   <div>Tiền hàng: {currentCalc.totalMerchandiseFobVND.toLocaleString('vi-VN')} đ</div>
-                  <div>Chi phí phân bổ: +{currentCalc.totalExtraCost.toLocaleString('vi-VN')} đ</div>
+                  <div>Thuế NK: {currentCalc.totalDutyVND.toLocaleString('vi-VN')} đ · VAT: {currentCalc.totalVatVND.toLocaleString('vi-VN')} đ</div>
+                  <div>Phí logistics: +{currentCalc.logisticsCost.toLocaleString('vi-VN')} đ</div>
                 </div>
               </div>
 

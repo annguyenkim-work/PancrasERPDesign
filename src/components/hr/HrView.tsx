@@ -12,16 +12,18 @@ const PERMISSION_MATRIX: {
   warehouse_keeper: boolean;
   showroom_manager: boolean;
   support: boolean;
+  settled?: boolean;
 }[] = [
   { module: 'Xem Tổng quan Dashboard & Doanh thu', admin: true, director: true, accountant: true, sales: false, warehouse_keeper: false, showroom_manager: true, support: false },
   { module: 'Quản lý Tồn Kho & Xuất Nhập 5 Kho/SR', admin: true, director: true, accountant: true, sales: false, warehouse_keeper: true, showroom_manager: true, support: false },
   { module: 'Điều Chuyển Hàng Kho Tổng sang Showroom', admin: true, director: true, accountant: false, sales: false, warehouse_keeper: true, showroom_manager: true, support: false },
   { module: 'Mua Hàng Container & Phân Bổ Giá Vốn PO', admin: true, director: true, accountant: true, sales: false, warehouse_keeper: false, showroom_manager: false, support: false },
   { module: 'Danh mục sản phẩm & bảng giá 3 kênh', admin: true, director: true, accountant: true, sales: true, warehouse_keeper: false, showroom_manager: true, support: false },
-  { module: 'Danh bạ khách hàng lẻ / đại lý / dự án', admin: true, director: true, accountant: true, sales: true, warehouse_keeper: false, showroom_manager: true, support: true },
+  { module: 'Danh bạ khách hàng lẻ / đại lý / nhà phân phối / dự án', admin: true, director: true, accountant: true, sales: true, warehouse_keeper: false, showroom_manager: true, support: true },
   { module: 'Lập đợt bàn giao trên hồ sơ dự án', admin: true, director: true, accountant: false, sales: true, warehouse_keeper: false, showroom_manager: false, support: false },
   { module: 'Hồ sơ nhà cung cấp nhập khẩu', admin: true, director: true, accountant: true, sales: false, warehouse_keeper: false, showroom_manager: false, support: false },
-  { module: 'Tạo Đơn Bán Hàng (Lẻ - Đại Lý - Dự Án)', admin: true, director: true, accountant: false, sales: true, warehouse_keeper: false, showroom_manager: true, support: false },
+  { module: 'Tạo Đơn Bán Hàng (Lẻ - Đại lý - Nhà phân phối - Dự án)', admin: true, director: true, accountant: false, sales: true, warehouse_keeper: false, showroom_manager: true, support: false },
+  { module: 'Sửa đơn bán / hóa đơn trước khi xuất kho', admin: true, director: true, accountant: true, sales: false, warehouse_keeper: false, showroom_manager: false, support: false, settled: true },
   { module: 'Lập báo giá và xuất catalog', admin: true, director: true, accountant: false, sales: true, warehouse_keeper: false, showroom_manager: true, support: false },
   { module: 'Phê Duyệt Ngoại Lệ Vượt Hạn Mức Công Nợ', admin: true, director: true, accountant: true, sales: false, warehouse_keeper: false, showroom_manager: false, support: false },
   { module: 'Thu Tiền & Gạch Nợ Khách Hàng', admin: true, director: true, accountant: true, sales: false, warehouse_keeper: false, showroom_manager: false, support: false },
@@ -233,7 +235,7 @@ export const HrView: React.FC = () => {
               Bảng Phân Quyền Chi Tiết Theo 7 Vai Trò
             </h3>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Đảm bảo nguyên tắc phân tách trách nhiệm (Separation of Duties) giữa Kinh doanh, Kho vận và Kế toán.
+              Dòng có nhãn Đã chốt là quyền khách xác nhận: Kế toán, Giám đốc và Admin sửa đơn trước khi xuất. Dấu ? là vai trò còn lại chưa được trả lời. Các dòng khác vẫn là đề xuất.
             </p>
           </div>
 
@@ -252,32 +254,37 @@ export const HrView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {PERMISSION_MATRIX.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50">
-                    <td className="py-3 px-4 font-medium text-slate-900">{row.module}</td>
-                    <td className="py-3 px-2 text-center">
-                      {row.admin ? <span className="text-emerald-600 font-bold">✓</span> : <span className="text-slate-300">-</span>}
+                {PERMISSION_MATRIX.map((row, idx) => {
+                  const mark = (allowed: boolean) =>
+                    allowed ? (
+                      <span className="text-emerald-600 font-bold">✓</span>
+                    ) : row.settled ? (
+                      <span className="text-amber-600 font-bold" title="Khách chưa trả lời vai trò này">?</span>
+                    ) : (
+                      <span className="text-slate-300">-</span>
+                    );
+                  return (
+                  <tr key={idx} className={row.settled ? 'bg-emerald-50/70' : 'hover:bg-slate-50'}>
+                    <td className="py-3 px-4 font-medium text-slate-900">
+                      <div className="flex items-center gap-2">
+                        <span>{row.module}</span>
+                        {row.settled && (
+                          <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
+                            Đã chốt
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td className="py-3 px-2 text-center">
-                      {row.director ? <span className="text-emerald-600 font-bold">✓</span> : <span className="text-slate-300">-</span>}
-                    </td>
-                    <td className="py-3 px-2 text-center">
-                      {row.accountant ? <span className="text-emerald-600 font-bold">✓</span> : <span className="text-slate-300">-</span>}
-                    </td>
-                    <td className="py-3 px-2 text-center">
-                      {row.sales ? <span className="text-emerald-600 font-bold">✓</span> : <span className="text-slate-300">-</span>}
-                    </td>
-                    <td className="py-3 px-2 text-center">
-                      {row.warehouse_keeper ? <span className="text-emerald-600 font-bold">✓</span> : <span className="text-slate-300">-</span>}
-                    </td>
-                    <td className="py-3 px-2 text-center">
-                      {row.showroom_manager ? <span className="text-emerald-600 font-bold">✓</span> : <span className="text-slate-300">-</span>}
-                    </td>
-                    <td className="py-3 px-2 text-center">
-                      {row.support ? <span className="text-emerald-600 font-bold">✓</span> : <span className="text-slate-300">-</span>}
-                    </td>
+                    <td className="py-3 px-2 text-center">{mark(row.admin)}</td>
+                    <td className="py-3 px-2 text-center">{mark(row.director)}</td>
+                    <td className="py-3 px-2 text-center">{mark(row.accountant)}</td>
+                    <td className="py-3 px-2 text-center">{mark(row.sales)}</td>
+                    <td className="py-3 px-2 text-center">{mark(row.warehouse_keeper)}</td>
+                    <td className="py-3 px-2 text-center">{mark(row.showroom_manager)}</td>
+                    <td className="py-3 px-2 text-center">{mark(row.support)}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

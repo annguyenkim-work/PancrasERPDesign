@@ -8,7 +8,8 @@ import {
   Customer, 
   CustomerType,
   ProjectMilestone,
-  Order, 
+  Order,
+  BillingDocument, 
   Supplier, 
   StockTransfer, 
   StockTake, 
@@ -96,6 +97,18 @@ interface ErpContextType {
   createOrder: (orderData: Partial<Order>) => { success: boolean; requiresApproval?: boolean; reason?: string };
   approveOrder: (orderId: string, approvalReason?: string) => void;
   updateOrderStatus: (orderId: string, nextStatus: OrderStatus) => void;
+  reviseOrderBeforeIssue: (
+    orderId: string,
+    patch: {
+      customerId: string;
+      customerName: string;
+      customerPhone: string;
+      deliveryAddress: string;
+      customerType: CustomerType;
+      items: { productId: string; quantity: number }[];
+    },
+  ) => boolean;
+  saveBillingSplit: (orderId: string, sides: ('dealer' | 'walk_in')[], walkInCustomerId: string) => boolean;
 
   // Debt actions
   recordPayment: (payment: Partial<PaymentReceipt>) => void;
@@ -923,6 +936,163 @@ export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('info', 'Cập nhật đơn hàng', `${ord.code} chuyển sang trạng thái: ${nextStatus}`);
   };
 
+  const reviseOrderBeforeIssue = (
+    orderId: string,
+    patch: {
+      customerId: string;
+      customerName: string;
+      customerPhone: string;
+      deliveryAddress: string;
+      customerType: CustomerType;
+      items: { productId: string; quantity: number }[];
+    },
+  ) => {
+    const allowed = currentUser.role === 'admin' || currentUser.role === 'director' || currentUser.role === 'accountant';
+    if (!allowed) {
+      showToast('error', 'Không có quyền', 'Chỉ Kế toán, Giám đốc và Admin được sửa đơn trước khi xuất.');
+      return false;
+    }
+    const order = orders.find((item) => item.id === orderId);
+    if (!order) return false;
+    if (order.status !== 'pending_approval' && order.status !== 'approved' && order.status !== 'draft') {
+      showToast('error', 'Đơn đã xuất', 'Đơn đã vào bước xuất kho nên không sửa khách hay số lượng.');
+      return false;
+    }
+    const lines = patch.items
+      .filter((line) => line.productId && line.quantity > 0)
+      .map((line) => {
+        const previous = order.items.find((item) => item.productId === line.productId);
+        const product = products.find((item) => item.id === line.productId);
+        const unitPrice = previous?.unitPrice
+          ?? (patch.customerType === 'project'
+            ? product?.projectPrice
+            : patch.customerType === 'dealer' || patch.customerType === 'distributor'
+              ? product?.dealerPrice
+              : product?.retailPrice)
+          ?? 0;
+        const discountPercent = previous?.discountPercent ?? 0;
+        const totalPrice = Math.round(unitPrice * line.quantity * (1 - discountPercent / 100));
+        return {
+          productId: line.productId,
+          productCode: product?.code || previous?.productCode || '',
+          productName: product?.name || previous?.productName || '',
+          unit: product?.unit || previous?.unit || '',
+          quantity: line.quantity,
+          unitPrice,
+          discountPercent,
+          totalPrice,
+          isCombo: product?.isCombo || previous?.isCombo,
+        };
+      });
+    if (lines.length === 0) {
+      showToast('error', 'Thiếu dòng hàng', 'Đơn cần ít nhất một mặt hàng với số lượng lớn hơn 0.');
+      return false;
+    }
+    const subtotal = lines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
+    const discountTotal = subtotal - lines.reduce((sum, line) => sum + line.totalPrice, 0);
+    const taxAmount = Math.round(lines.reduce((sum, line) => sum + line.totalPrice, 0) * 0.1);
+    const grandTotal = lines.reduce((sum, line) => sum + line.totalPrice, 0) + taxAmount;
+    setOrders((prev) =>
+      prev.map((item) =>
+        item.id === orderId
+          ? {
+              ...item,
+              customerId: patch.customerId,
+              customerName: patch.customerName.trim(),
+              customerPhone: patch.customerPhone.trim(),
+              deliveryAddress: patch.deliveryAddress.trim(),
+              customerType: patch.customerType,
+              items: lines,
+              subtotal,
+              discountTotal,
+              taxAmount,
+              grandTotal,
+            }
+          : item,
+      ),
+    );
+    logAudit('orders', 'EDIT_ORDER', `Sửa đơn ${order.code} trước khi xuất chứng từ: ${patch.customerName}, ${lines.length} dòng.`);
+    showToast('success', 'Đã sửa đơn', `${order.code} đã cập nhật khách và dòng hàng. Phiếu xuất sẽ in theo nội dung này.`);
+    return true;
+  };
+
+  const saveBillingSplit = (orderId: string, sides: ('dealer' | 'walk_in')[], walkInCustomerId: string) => {
+    const allowed = currentUser.role === 'admin' || currentUser.role === 'director' || currentUser.role === 'accountant';
+    if (!allowed) {
+      showToast('error', 'Không có quyền', 'Chỉ Kế toán, Giám đốc và Admin được lập chứng từ thanh toán.');
+      return false;
+    }
+    const order = orders.find((item) => item.id === orderId);
+    if (!order) return false;
+    if (order.customerType !== 'dealer') {
+      showToast('error', 'Không tách được', 'Tách hóa đơn chỉ dùng cho đơn đại lý. Phiếu xuất và tồn không đổi.');
+      return false;
+    }
+    if (order.status === 'completed') {
+      showToast('error', 'Đơn đã hoàn tất', 'Không tách hoặc gộp hóa đơn sau khi đơn hoàn tất. Phiếu xuất và chứng từ đã lưu giữ nguyên.');
+      return false;
+    }
+    if (order.status !== 'delivering') {
+      showToast('error', 'Chưa có phiếu xuất', 'Chỉ tách hóa đơn sau khi hàng đã xuất một chuyến, và trước khi đơn hoàn tất. Phiếu xuất và tồn không đổi.');
+      return false;
+    }
+    if (sides.length !== order.items.length || sides.some((side) => side !== 'dealer' && side !== 'walk_in')) {
+      showToast('error', 'Tách lệch phiếu xuất', 'Mỗi mặt hàng trên phiếu xuất phải được gán trọn vào đúng một chứng từ.');
+      return false;
+    }
+    const dealerLines = order.items.filter((_, index) => sides[index] === 'dealer');
+    const walkLines = order.items.filter((_, index) => sides[index] === 'walk_in');
+    const walkIn = customers.find((customer) => customer.id === walkInCustomerId && customer.type === 'retail');
+    if (walkLines.length > 0 && !walkIn) {
+      showToast('error', 'Chưa chọn khách lẻ', 'Mặt hàng không lấy hóa đơn đại lý cần một mã Khách lẻ / Khách vãng lai. Chưa lưu.');
+      return false;
+    }
+    const dealer = customers.find((customer) => customer.id === order.customerId);
+    const moneyOf = (lines: Order['items']) => {
+      const subtotal = lines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
+      const discountTotal = lines.reduce((sum, line) => sum + (line.unitPrice * line.quantity * line.discountPercent) / 100, 0);
+      const taxAmount = Math.round((subtotal - discountTotal) * 0.1);
+      return { subtotal, discountTotal, taxAmount, grandTotal: subtotal - discountTotal + taxAmount };
+    };
+    const documents: BillingDocument[] = [];
+    if (dealerLines.length > 0) {
+      const money = moneyOf(dealerLines);
+      documents.push({
+        id: `${order.id}-HD1`,
+        code: `${order.code}-HD1`,
+        side: 'dealer' as const,
+        customerId: order.customerId,
+        customerCode: dealer?.code || order.customerId,
+        customerName: order.customerName,
+        lines: dealerLines,
+        ...money,
+      });
+    }
+    if (walkLines.length > 0 && walkIn) {
+      const money = moneyOf(walkLines);
+      documents.push({
+        id: `${order.id}-HD${documents.length + 1}`,
+        code: `${order.code}-HD${documents.length + 1}`,
+        side: 'walk_in' as const,
+        customerId: walkIn.id,
+        customerCode: walkIn.code,
+        customerName: walkIn.name,
+        lines: walkLines,
+        ...money,
+      });
+    }
+    setOrders((prev) => prev.map((item) => (item.id === orderId ? { ...item, billingDocuments: documents } : item)));
+    logAudit('orders', 'EDIT_ORDER', `Tách hóa đơn ${order.code}: ${documents.map((doc) => `${doc.code} (${doc.lines.length} dòng, ${doc.customerCode})`).join('; ')}.`);
+    showToast(
+      'success',
+      documents.length === 1 ? 'Đã lập một chứng từ' : 'Đã tách hai hóa đơn',
+      documents.length === 1
+        ? `${documents[0].code} gắn với ${documents[0].customerName}. Phiếu xuất vẫn một phiếu, kho không trừ thêm.`
+        : `${documents[0].code} và ${documents[1].code}. Phiếu xuất vẫn một phiếu, kho không trừ thêm.`,
+    );
+    return true;
+  };
+
   // Debt & Payment Actions
   const recordPayment = (payment: Partial<PaymentReceipt>) => {
     const customer = customers.find((c) => c.id === payment.customerId);
@@ -1040,7 +1210,7 @@ export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     contractValue?: number;
     milestones?: ProjectMilestone[];
   }) => {
-    const prefix = data.type === 'dealer' ? 'DL' : data.type === 'project' ? 'DA' : 'KH';
+    const prefix = data.type === 'dealer' ? 'DL' : data.type === 'distributor' ? 'NPP' : data.type === 'project' ? 'DA' : 'KH';
     const customer: Customer = {
       id: `CUST-${Date.now().toString().slice(-6)}`,
       code: `${prefix}-${Date.now().toString().slice(-4)}`,
@@ -1304,6 +1474,8 @@ export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createOrder,
         approveOrder,
         updateOrderStatus,
+        reviseOrderBeforeIssue,
+        saveBillingSplit,
         recordPayment,
         updateCustomerCredit,
         addProduct,

@@ -72,7 +72,7 @@ export interface Product {
   description: string;
 }
 
-export type CustomerType = 'retail' | 'dealer' | 'project';
+export type CustomerType = 'retail' | 'dealer' | 'distributor' | 'project';
 
 export interface Customer {
   id: string;
@@ -162,6 +162,21 @@ export interface Order {
   milestoneId?: string;
   milestoneName?: string;
   projectMilestones?: ProjectMilestone[];
+  billingDocuments?: BillingDocument[];
+}
+
+export interface BillingDocument {
+  id: string;
+  code: string;
+  side: 'dealer' | 'walk_in';
+  customerId: string;
+  customerCode: string;
+  customerName: string;
+  lines: OrderItem[];
+  subtotal: number;
+  discountTotal: number;
+  taxAmount: number;
+  grandTotal: number;
 }
 
 export type TransferStatus = 'draft' | 'in_transit' | 'received' | 'cancelled';
@@ -223,7 +238,7 @@ export interface Supplier {
 }
 
 export interface POLandedCostItem {
-  type: 'import_tax' | 'ocean_freight' | 'port_handling' | 'inspection' | 'domestic_transport';
+  type: 'import_tax' | 'vat' | 'ocean_freight' | 'port_handling' | 'inspection' | 'domestic_transport';
   name: string;
   amount: number;
   allocationMethod: 'by_value' | 'by_weight'; // Phân bổ theo trị giá hay khối lượng
@@ -238,6 +253,7 @@ export interface PurchaseOrderItem {
   exchangeRate: number; // Tỷ giá USD -> VND
   fobAmountVND: number;
   weightKg: number;
+  importDutyPercent?: number;
   allocatedCostVND: number; // Chi phí nhập khẩu phân bổ
   finalUnitLandedCost: number; // Giá vốn nhập kho hoàn chỉnh sau phân bổ
 }
@@ -256,6 +272,7 @@ export interface PurchaseOrder {
   destinationPort: string;
   status: 'draft' | 'ordered' | 'shipping' | 'customs_cleared' | 'received' | 'cancelled';
   items: PurchaseOrderItem[];
+  vatRate?: number;
   landedCosts: POLandedCostItem[];
   totalMerchandiseVND: number;
   totalLandedCostVND: number;

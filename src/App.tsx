@@ -30,7 +30,7 @@ const TAB_TITLES: Record<TabKey, string> = {
   suppliers: 'Nhà cung cấp nhập khẩu',
   catalog: 'Danh mục sản phẩm & giá',
   customers: 'Danh bạ khách hàng',
-  sales: 'Bán hàng (Lẻ - Đại lý - Dự án)',
+  sales: 'Bán hàng (Lẻ - Đại lý - Nhà phân phối - Dự án)',
   quotes: 'Báo giá & Catalog',
   combo: 'Quản lý Combo Sản phẩm',
   debt: 'Quản lý Công nợ & Hạn mức',

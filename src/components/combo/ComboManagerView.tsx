@@ -12,6 +12,7 @@ import {
   ChevronRight,
   X
 } from 'lucide-react';
+import { MoneyInput } from '../common/MoneyInput';
 
 export const ComboManagerView: React.FC = () => {
   const { products, locations, createCombo } = useErp();
@@ -317,15 +318,15 @@ export const ComboManagerView: React.FC = () => {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <label className="block">
                   <span className="block text-xs font-semibold text-slate-700 mb-1">Giá lẻ</span>
-                  <input type="number" min={0} required value={comboForm.retailPrice} onChange={(e) => setComboForm({ ...comboForm, retailPrice: Number(e.target.value) })} className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300" />
+                  <MoneyInput value={comboForm.retailPrice} onChange={(retailPrice) => setComboForm({ ...comboForm, retailPrice })} className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 font-mono" />
                 </label>
                 <label className="block">
                   <span className="block text-xs font-semibold text-slate-700 mb-1">Giá đại lý</span>
-                  <input type="number" min={0} required value={comboForm.dealerPrice} onChange={(e) => setComboForm({ ...comboForm, dealerPrice: Number(e.target.value) })} className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300" />
+                  <MoneyInput value={comboForm.dealerPrice} onChange={(dealerPrice) => setComboForm({ ...comboForm, dealerPrice })} className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 font-mono" />
                 </label>
                 <label className="block">
                   <span className="block text-xs font-semibold text-slate-700 mb-1">Giá dự án</span>
-                  <input type="number" min={0} required value={comboForm.projectPrice} onChange={(e) => setComboForm({ ...comboForm, projectPrice: Number(e.target.value) })} className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300" />
+                  <MoneyInput value={comboForm.projectPrice} onChange={(projectPrice) => setComboForm({ ...comboForm, projectPrice })} className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 font-mono" />
                 </label>
                 <label className="block">
                   <span className="block text-xs font-semibold text-slate-700 mb-1">BH (tháng)</span>
