@@ -24,6 +24,8 @@ export const DashboardView: React.FC = () => {
   } = useErp();
 
   const [revenuePeriod, setRevenuePeriod] = useState<'day' | 'month' | 'year'>('month');
+  const warehouseCount = locations.filter((item) => item.type === 'warehouse').length;
+  const showroomCount = locations.filter((item) => item.type === 'showroom').length;
 
   // Revenue metrics
   const totalCompletedOrders = orders.filter((o) => o.status === 'completed' || o.status === 'delivering' || o.status === 'exporting');
@@ -272,7 +274,7 @@ export const DashboardView: React.FC = () => {
             <span className="text-xs font-semibold text-slate-500">VNĐ</span>
           </div>
           <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-            <span>3 Kho Tổng &amp; 2 Showroom</span>
+            <span>{warehouseCount} Kho Tổng &amp; {showroomCount} Showroom</span>
             <span>·</span>
             <span className="text-amber-600 font-medium">{lowStockProducts.length} mặt hàng chạm min</span>
           </div>
@@ -284,7 +286,7 @@ export const DashboardView: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
           <div>
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-              Tình Trạng Tồn Kho Tại Từng Điểm (3 Kho Tổng &amp; 2 Showroom)
+              Tình Trạng Tồn Kho Tại Từng Điểm ({warehouseCount} Kho Tổng &amp; {showroomCount} Showroom)
             </h2>
             <p className="text-xs text-slate-500">
               Cập nhật đồng bộ theo thời gian thực - Số lượng tồn thực tế và giá trị hàng hóa theo giá vốn.

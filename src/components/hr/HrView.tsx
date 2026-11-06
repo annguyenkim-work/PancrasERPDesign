@@ -28,6 +28,7 @@ const PERMISSION_MATRIX: {
   { module: 'Kích Hoạt Bảo Hành & Xử Lý Vé RMA', admin: true, director: false, accountant: false, sales: true, warehouse_keeper: false, showroom_manager: true, support: true },
   { module: 'Xem Nhật Ký Hệ Thống (Audit Logs)', admin: true, director: true, accountant: true, sales: false, warehouse_keeper: false, showroom_manager: false, support: false },
   { module: 'Thêm và sửa hồ sơ nhân viên', admin: true, director: true, accountant: false, sales: false, warehouse_keeper: false, showroom_manager: false, support: false },
+  { module: 'Thêm, sửa, xóa Kho & Showroom', admin: true, director: true, accountant: false, sales: false, warehouse_keeper: false, showroom_manager: false, support: false },
 ];
 
 const ROLE_PRESETS: Record<Role, { roleLabel: string; department: string }> = {

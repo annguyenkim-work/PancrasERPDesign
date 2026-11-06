@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ErpProvider, useErp } from './context/ErpContext';
 import { Sidebar, TabKey } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
@@ -20,6 +20,7 @@ import { DebtView } from './components/debt/DebtView';
 import { WarrantyView } from './components/warranty/WarrantyView';
 import { HrView } from './components/hr/HrView';
 import { AuditLogView } from './components/audit/AuditLogView';
+import { SitesView } from './components/sites/SitesView';
 import { ToastContainer } from './components/common/ToastContainer';
 
 const TAB_TITLES: Record<TabKey, string> = {
@@ -35,12 +36,19 @@ const TAB_TITLES: Record<TabKey, string> = {
   debt: 'Quản lý Công nợ & Hạn mức',
   warranty: 'Bảo hành Điện tử (e-Warranty)',
   hr: 'Hồ sơ Nhân sự & Phân quyền (RBAC)',
+  sites: 'Quản lý Kho & Showroom',
   audit: 'Nhật ký Hệ thống (Audit Log)',
 };
 
 const MainContent: React.FC = () => {
+  const { currentUser } = useErp();
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const canManageSites = currentUser.role === 'admin' || currentUser.role === 'director';
+
+  useEffect(() => {
+    if (activeTab === 'sites' && !canManageSites) setActiveTab('dashboard');
+  }, [activeTab, canManageSites]);
 
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden font-sans">
@@ -73,6 +81,7 @@ const MainContent: React.FC = () => {
             {activeTab === 'debt' && <DebtView />}
             {activeTab === 'warranty' && <WarrantyView />}
             {activeTab === 'hr' && <HrView />}
+            {activeTab === 'sites' && canManageSites && <SitesView />}
             {activeTab === 'audit' && <AuditLogView />}
           </div>
         </main>

@@ -15,7 +15,8 @@ import {
   Package,
   UserRound,
   Factory,
-  FileText
+  FileText,
+  MapPin
 } from 'lucide-react';
 
 export type TabKey = 
@@ -31,6 +32,7 @@ export type TabKey =
   | 'debt'
   | 'warranty'
   | 'hr'
+  | 'sites'
   | 'audit';
 
 interface SidebarProps {
@@ -46,7 +48,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isMobileOpen,
   onCloseMobile,
 }) => {
-  const { orders, transfers, warrantyTickets } = useErp();
+  const { orders, transfers, warrantyTickets, currentUser, locations } = useErp();
+  const canManageSites = currentUser.role === 'admin' || currentUser.role === 'director';
+  const warehouseCount = locations.filter((item) => item.type === 'warehouse').length;
+  const showroomCount = locations.filter((item) => item.type === 'showroom').length;
 
   // Badges calculation
   const pendingApprovalOrders = orders.filter((o) => o.status === 'pending_approval').length;
@@ -133,6 +138,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       section: 'QUẢN TRỊ NỘI BỘ',
     },
     {
+      key: 'sites' as TabKey,
+      label: 'Kho & Showroom',
+      icon: MapPin,
+      section: 'QUẢN TRỊ NỘI BỘ',
+    },
+    {
       key: 'audit' as TabKey,
       label: 'Nhật ký Hệ thống (Audit Log)',
       icon: ClipboardList,
@@ -141,7 +152,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   // Group items by section
-  const sections = Array.from(new Set(navItems.map((item) => item.section)));
+  const visibleItems = navItems.filter((item) => item.key !== 'sites' || canManageSites);
+  const sections = Array.from(new Set(visibleItems.map((item) => item.section)));
 
   const handleSelect = (key: TabKey) => {
     onSelectTab(key);
@@ -185,14 +197,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Quick Facility Tag */}
         <div className="px-5 py-2.5 bg-slate-950/60 border-b border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
-          <span className="truncate">3 Kho Tổng · 2 Showroom</span>
+          <span className="truncate">{warehouseCount} Kho Tổng · {showroomCount} Showroom</span>
           <span className="text-emerald-400 font-mono text-[10px]">REALTIME</span>
         </div>
 
         {/* Navigation list */}
         <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
           {sections.map((secName) => {
-            const items = navItems.filter((i) => i.section === secName);
+            const items = visibleItems.filter((i) => i.section === secName);
             return (
               <div key={secName}>
                 <div className="px-3 mb-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">

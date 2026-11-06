@@ -338,7 +338,10 @@ export interface AuditLog {
     | 'CREATE_SUPPLIER'
     | 'CREATE_COMBO'
     | 'CREATE_EMPLOYEE'
-    | 'UPDATE_EMPLOYEE';
+    | 'UPDATE_EMPLOYEE'
+    | 'CREATE_LOCATION'
+    | 'UPDATE_LOCATION'
+    | 'DELETE_LOCATION';
   locationName: string;
   details: string;
 }

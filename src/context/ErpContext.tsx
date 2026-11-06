@@ -63,6 +63,9 @@ interface ErpContextType {
   selectedLocationId: string; // 'ALL' or specific location ID
   setSelectedLocationId: (id: string) => void;
   locations: Location[];
+  addLocation: (data: Omit<Location, 'id'>) => boolean;
+  updateLocation: (id: string, data: Omit<Location, 'id'>) => boolean;
+  deleteLocation: (id: string) => boolean;
   products: Product[];
   customers: Customer[];
   orders: Order[];
@@ -176,7 +179,10 @@ export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const [currentUser, setCurrentUser] = useState<UserProfile>(INITIAL_USERS[0]);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('ALL');
-  const [locations] = useState<Location[]>(INITIAL_LOCATIONS);
+  const [locations, setLocations] = useState<Location[]>(() => {
+    const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}locations`);
+    return saved ? JSON.parse(saved) : INITIAL_LOCATIONS;
+  });
   const [suppliers, setSuppliers] = useState<Supplier[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}suppliers`);
     return saved ? JSON.parse(saved) : INITIAL_SUPPLIERS;
@@ -271,6 +277,10 @@ export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(`${STORAGE_KEY_PREFIX}users`, JSON.stringify(users));
   }, [users]);
 
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}locations`, JSON.stringify(locations));
+  }, [locations]);
+
   const showToast = (type: Toast['type'], title: string, message: string) => {
     const id = Date.now().toString() + Math.random().toString().slice(2, 5);
     setToasts((prev) => [...prev, { id, type, title, message }]);
@@ -328,6 +338,108 @@ export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUsers((prev) => [employee, ...prev]);
     logAudit('hr', 'CREATE_EMPLOYEE', `Thêm nhân viên ${employee.name} — ${employee.roleLabel}`);
     showToast('success', 'Đã thêm nhân viên', `${employee.name} đã có trong danh sách nhân sự.`);
+  };
+
+  const canManageLocations = currentUser.role === 'admin' || currentUser.role === 'director';
+
+  const locationCodeTaken = (code: string, exceptId?: string) =>
+    locations.some((item) => item.id !== exceptId && item.code.trim().toLowerCase() === code.trim().toLowerCase());
+
+  const addLocation = (data: Omit<Location, 'id'>) => {
+    if (!canManageLocations) {
+      showToast('error', 'Không có quyền', 'Chỉ Admin và Giám đốc được thêm kho hoặc showroom.');
+      return false;
+    }
+    if (locationCodeTaken(data.code)) {
+      showToast('error', 'Trùng mã địa điểm', `Mã ${data.code.trim()} đã được dùng.`);
+      return false;
+    }
+    const location: Location = {
+      id: `LOC-${Date.now().toString().slice(-8)}`,
+      ...data,
+      code: data.code.trim(),
+      name: data.name.trim(),
+      address: data.address.trim(),
+      managerName: data.managerName.trim(),
+      phone: data.phone.trim(),
+      capacityM2: Math.max(1, data.capacityM2),
+    };
+    setLocations((prev) => [...prev, location]);
+    setProducts((prev) =>
+      prev.map((product) => ({
+        ...product,
+        stockByLocation: {
+          ...product.stockByLocation,
+          [location.id]: product.stockByLocation[location.id] || { onHand: 0, reserved: 0, inTransit: 0 },
+        },
+      }))
+    );
+    logAudit('inventory', 'CREATE_LOCATION', `Thêm ${location.type === 'warehouse' ? 'kho' : 'showroom'} ${location.name} (${location.code})`);
+    showToast('success', 'Đã thêm địa điểm', `${location.name} đã có trong hệ thống.`);
+    return true;
+  };
+
+  const updateLocation = (id: string, data: Omit<Location, 'id'>) => {
+    if (!canManageLocations) {
+      showToast('error', 'Không có quyền', 'Chỉ Admin và Giám đốc được sửa kho hoặc showroom.');
+      return false;
+    }
+    if (!locations.some((item) => item.id === id)) return false;
+    if (locationCodeTaken(data.code, id)) {
+      showToast('error', 'Trùng mã địa điểm', `Mã ${data.code.trim()} đã được dùng.`);
+      return false;
+    }
+    const next: Location = {
+      id,
+      ...data,
+      code: data.code.trim(),
+      name: data.name.trim(),
+      address: data.address.trim(),
+      managerName: data.managerName.trim(),
+      phone: data.phone.trim(),
+      capacityM2: Math.max(1, data.capacityM2),
+    };
+    setLocations((prev) => prev.map((item) => (item.id === id ? next : item)));
+    logAudit('inventory', 'UPDATE_LOCATION', `Cập nhật ${next.type === 'warehouse' ? 'kho' : 'showroom'} ${next.name} (${next.code})`);
+    showToast('success', 'Đã cập nhật địa điểm', `${next.name} đã được lưu.`);
+    return true;
+  };
+
+  const deleteLocation = (id: string) => {
+    if (!canManageLocations) {
+      showToast('error', 'Không có quyền', 'Chỉ Admin và Giám đốc được xóa kho hoặc showroom.');
+      return false;
+    }
+    const location = locations.find((item) => item.id === id);
+    if (!location) return false;
+    const stockInUse = products.some((product) => {
+      const stock = product.stockByLocation[id];
+      return Boolean(stock && (stock.onHand !== 0 || stock.reserved !== 0 || stock.inTransit !== 0));
+    });
+    const reasons = [
+      users.some((user) => user.branchId === id) ? 'đang có nhân viên gắn với địa điểm này' : '',
+      orders.some((order) => order.locationId === id) ? 'đã phát sinh đơn bán' : '',
+      transfers.some((item) => item.fromLocationId === id || item.toLocationId === id) ? 'đã có phiếu chuyển kho' : '',
+      stockTakes.some((item) => item.locationId === id) ? 'đã có biên bản kiểm kê' : '',
+      purchaseOrders.some((item) => item.targetWarehouseId === id) ? 'đã có đơn mua nhập về' : '',
+      stockInUse ? 'còn tồn, giữ chỗ hoặc hàng đang chuyển' : '',
+    ].filter(Boolean);
+    if (reasons.length > 0) {
+      showToast('error', 'Không xóa được', `${location.name} ${reasons.join(', ')}.`);
+      return false;
+    }
+    setLocations((prev) => prev.filter((item) => item.id !== id));
+    setProducts((prev) =>
+      prev.map((product) => {
+        const stockByLocation = { ...product.stockByLocation };
+        delete stockByLocation[id];
+        return { ...product, stockByLocation };
+      })
+    );
+    if (selectedLocationId === id) setSelectedLocationId('ALL');
+    logAudit('inventory', 'DELETE_LOCATION', `Xóa ${location.type === 'warehouse' ? 'kho' : 'showroom'} ${location.name} (${location.code})`);
+    showToast('success', 'Đã xóa địa điểm', `${location.name} đã được gỡ khỏi danh mục.`);
+    return true;
   };
 
   const updateEmployee = (id: string, data: Omit<UserProfile, 'id' | 'avatar'>) => {
@@ -1165,6 +1277,9 @@ export const ErpProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selectedLocationId,
         setSelectedLocationId,
         locations,
+        addLocation,
+        updateLocation,
+        deleteLocation,
         products,
         customers,
         orders,

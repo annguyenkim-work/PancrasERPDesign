@@ -39,8 +39,10 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu, activeTabTit
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
 
+  const warehouseCount = locations.filter((item) => item.type === 'warehouse').length;
+  const showroomCount = locations.filter((item) => item.type === 'showroom').length;
   const selectedLocName = selectedLocationId === 'ALL'
-    ? 'Toàn bộ 3 Kho & 2 Showroom'
+    ? `Toàn bộ ${warehouseCount} Kho & ${showroomCount} Showroom`
     : locations.find((l) => l.id === selectedLocationId)?.name || 'Chi nhánh';
 
   const handleExportQuickReport = () => {
@@ -115,7 +117,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu, activeTabTit
                   selectedLocationId === 'ALL' ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                <span>Toàn bộ hệ thống (3 Kho + 2 Showroom)</span>
+                <span>Toàn bộ hệ thống ({warehouseCount} Kho + {showroomCount} Showroom)</span>
                 {selectedLocationId === 'ALL' && <span className="text-sky-600 font-bold">✓</span>}
               </button>
               <div className="border-t border-slate-100 my-1" />
